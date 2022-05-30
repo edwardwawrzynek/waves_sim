@@ -1,0 +1,41 @@
+## OSX artifacts
+.DS_Store
+
+## Dear ImGui artifacts
+imgui.ini
+
+## General build artifacts
+*.o
+*.obj
+*.exe
+examples/build/*
+examples/*/Debug/*
+examples/*/Release/*
+examples/*/x64/*
+
+## Visual Studio artifacts
+.vs
+ipch
+*.opensdf
+*.log
+*.pdb
+*.ilk
+*.user
+*.sdf
+*.suo
+*.VC.db
+*.VC.VC.opendb
+
+## Commonly used CMake directories
+/build*/
+
+## Xcode artifacts
+project.xcworkspace
+xcuserdata
+
+## JetBrains IDE artifacts
+.idea
+cmake-build-*
+
+## VSCode artifacts
+.vscode
