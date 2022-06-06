@@ -1,3 +1,6 @@
+#ifndef MAIN_H
+#define MAIN_H
+
 #include <SDL.h>
 #if defined(__EMSCRIPTEN__)
 #include <GLES3/gl3.h>
@@ -32,12 +35,40 @@ class WavesApp {
   // current screen size
   GLsizei width, height;
 
-  // Simulation state framebuffer and texture
-  GLuint sim_framebuffer;
-  GLuint sim_texture;
+  // Simulation state storage texture. This is an rgba floating point texture.
+  // The red channel is position (u), green is velocity (du/dt), blue is wave speed (c).
+  // Because sim_program reads and writes the state, we use two textures. One texture stores the
+  // current state and is read from, while the new state is written to the other texture. After each
+  // cycle, each texture's role is flipped.
+  GLuint sim_textures[2];
+  // Framebuffers that sim_texture0 and sim_texture1 are bound to
+  GLuint sim_framebuffers[2];
+  // Index of sim texture that is to be written to next. The opposite texture contains the last
+  // written state.
+  int current_sim_texture;
 
-  GLint sim_tex_loc_sim;
-  GLint sim_tex_loc_display;
+  // uniform location for sim_texture in sim_program
+  GLint sim_sim_tex_loc;
+  // uniform location for sim_texture in display_program
+  GLint display_sim_tex_loc;
+  // uniform location for screen_size in display_program
+  GLint display_screen_size_loc;
+
+  // uniform locations for simulation params
+  GLint delta_x_loc;
+  GLint delta_t_loc;
+  GLint time_loc;
+
+  // Size of the simulation texture. Powers of two make the most efficient use of vram.
+  GLsizei sim_texture_size;
+  // Physical size of each texel in the simulation texture (in m).
+  float delta_x;
+  // Time step size for simulation (in s).
+  float delta_t;
+  // Default wave speed (in m/s).
+  float default_wave_c;
+
+  float time;
 
   // Read a file into a GLchar[]
   static const GLchar *read_shader_file(const char *path);
@@ -71,7 +102,7 @@ class WavesApp {
   void run_display();
 
 public:
-  WavesApp(): width(640), height(480) {};
+  WavesApp(): width(640), height(640), current_sim_texture(0), sim_texture_size(256), delta_x(0.1), delta_t(0.005), default_wave_c(343.0), time(0.0) {};
 
   // Initialize the app. Return 0 on success, non zero on failure.
   int init();
@@ -82,3 +113,5 @@ public:
   // Destroy imgui, sdl, and gl context
   void shutdown();
 };
+
+#endif

@@ -13,5 +13,5 @@ endif ()
 
 include_directories(${SDL2_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS})
 
-add_executable(waves main.cpp)
+add_executable(waves main.cpp space.cpp)
 target_link_libraries(waves PRIVATE ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${CMAKE_DL_LIBS} imgui)

@@ -5,10 +5,15 @@ precision highp int;
 out vec4 color;
 
 uniform sampler2D sim_texture;
+uniform vec2 screen_size;
 
 void main() {
     // get screen pos in [0, 1]
-    vec2 screen_pos = gl_FragCoord.xy / vec2(640.0, 480.0);
-    color = texture(sim_texture, screen_pos.xy);
-    color = vec4(color.rg, screen_pos.x, 1.0);
+    vec2 screen_pos = gl_FragCoord.xy / screen_size;
+    vec4 point = texture(sim_texture, screen_pos.xy);
+    if(point.x > 0.0) {
+        color = vec4(point.x, 0.0, 0.0, 1.0);
+    } else {
+        color = vec4(0.0, 0.0, -point.x, 1.0);
+    }
 }

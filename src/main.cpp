@@ -18,13 +18,6 @@
 #define OPENGL_MINOR 3
 #define GLSL_VERSION_STRING "#version 330 core"
 #endif
-GLuint vao;
-GLuint triangle_buffer;
-GLuint fractal_program;
-
-SDL_Window *window = nullptr;
-SDL_Surface *surface = nullptr;
-SDL_GLContext gl_context = nullptr;
 
 // Initialize SDL and OpenGL
 int WavesApp::init_sdl_opengl() {
@@ -106,6 +99,7 @@ const GLchar *WavesApp::read_shader_file(const char *path) {
   return contents;
 }
 
+// Load and compile a shader from file
 GLuint WavesApp::load_shader(const char *path, GLenum shader_type) {
   const GLchar *contents = read_shader_file(path);
   if (contents == nullptr) {
@@ -156,6 +150,7 @@ GLuint WavesApp::create_program(GLuint vertex_shader, GLuint frag_shader) {
   return program;
 }
 
+// Setup the simulation and display programs
 int WavesApp::init_programs() {
   vertex_shader = load_shader("/home/edward/Documents/waves_sim/shaders/screen_cover.vert", GL_VERTEX_SHADER);
   sim_shader = load_shader("/home/edward/Documents/waves_sim/shaders/wave_sim.frag", GL_FRAGMENT_SHADER);
@@ -171,37 +166,41 @@ int WavesApp::init_programs() {
     return -1;
   }
 
-  // get texture uniform locations
-  sim_tex_loc_sim = glGetUniformLocation(sim_program, "sim_texture");
-  sim_tex_loc_display = glGetUniformLocation(display_program, "sim_texture");
+  // get uniform locations
+  sim_sim_tex_loc = glGetUniformLocation(sim_program, "sim_texture");
+  display_sim_tex_loc = glGetUniformLocation(display_program, "sim_texture");
+  display_screen_size_loc = glGetUniformLocation(display_program, "screen_size");
 
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, sim_texture);
-
-  glUniform1i(sim_tex_loc_sim, 0);
-  glUniform1i(sim_tex_loc_display, 0);
+  delta_x_loc = glGetUniformLocation(sim_program, "delta_x");
+  delta_t_loc = glGetUniformLocation(sim_program, "delta_t");
+  time_loc = glGetUniformLocation(sim_program, "time");
 
   return 0;
 }
 
+// Create the two simulation textures and bind them to framebuffers
 int WavesApp::init_sim_texture() {
-  // create framebuffer for sim program
-  glGenFramebuffers(1, &sim_framebuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffer);
-  // create empty texture
-  glGenTextures(1, &sim_texture);
-  glBindTexture(GL_TEXTURE_2D, sim_texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+  for(int i = 0; i < 2; i++) {
+    // create framebuffer for sim program
+    glGenFramebuffers(1, &sim_framebuffers[i]);
+    glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[i]);
+    // create empty texture
+    glActiveTexture(GL_TEXTURE0 + i);
+    glGenTextures(1, &sim_textures[i]);
+    glBindTexture(GL_TEXTURE_2D, sim_textures[i]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, sim_texture_size, sim_texture_size, 0, GL_RGBA, GL_FLOAT, nullptr);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, sim_texture, 0);
-  GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
-  glDrawBuffers(1, draw_buffers);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sim_textures[i], 0);
 
-  if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    return -1;
+    GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
+    glDrawBuffers(1, draw_buffers);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      return -1;
+    }
   }
 
   return 0;
@@ -223,33 +222,47 @@ int WavesApp::handle_sdl_events() {
     if(event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && event.window.windowID == SDL_GetWindowID(window)) {
       width = event.window.data1;
       height = event.window.data2;
-      // resize sim texture
-      glBindTexture(GL_TEXTURE_2D, sim_texture);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
     }
   }
 
   return 0;
 }
 
+// draw the screen covering triangles
 void WavesApp::draw_quad() {
   glBindVertexArray(vao);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+// Run one step of the simulation
 void WavesApp::run_simulation() {
-  glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffer);
-  glViewport(0, 0, width, height);
+  // draw to target framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture]);
+  glViewport(0, 0, sim_texture_size, sim_texture_size);
 
   glUseProgram(sim_program);
+  // set program to read from texture not being written to
+  glUniform1i(sim_sim_tex_loc, current_sim_texture ? 0 : 1);
+
+  glUniform1f(delta_x_loc, delta_x);
+  glUniform1f(delta_t_loc, delta_t);
+  glUniform1f(time_loc, time);
+
   draw_quad();
+  // swap sim textures
+  current_sim_texture = current_sim_texture ? 0 : 1;
+
+  time += delta_t;
 }
 
+// Draw simulation state to display
 void WavesApp::run_display() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, width, height);
 
   glUseProgram(display_program);
+  glUniform1i(display_sim_tex_loc, current_sim_texture);
+  glUniform2f(display_screen_size_loc, (GLfloat)width, (GLfloat)height);
   draw_quad();
 }
 
@@ -266,6 +279,11 @@ int WavesApp::draw_frame() {
   run_simulation();
   // render state
   run_display();
+
+  ImGui::Begin("Simulation Settings");
+  ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.1);
+  ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+  ImGui::End();
 
   // render imgui
   ImGui::Render();
