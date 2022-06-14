@@ -1,10 +1,9 @@
+#include "main.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl.h>
-#include "main.hpp"
 
 #include <cstdio>
-#include <iostream>
 
 // opengl version
 #if defined(__EMSCRIPTEN__)
@@ -39,8 +38,8 @@ int WavesApp::init_sdl_window() {
   // setup graphics context
   SDL_WindowFlags window_flags =
       (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-  window = SDL_CreateWindow("Waves", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width,
-                            height, window_flags);
+  window = SDL_CreateWindow("Waves", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height,
+                            window_flags);
   gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1);
@@ -61,126 +60,9 @@ int WavesApp::init_imgui() {
   return 0;
 }
 
-// Setup screen covering triangles
-int WavesApp::init_vao() {
-  glGenVertexArrays(1, &vao);
-  glBindVertexArray(vao);
-
-  // triangle strip defining quad covering whole screen
-  GLfloat vertices[4][2] = {{-1.0, 1.0}, {1.0, 1.0}, {-1.0, -1.0}, {1.0, -1.0}};
-
-  glGenBuffers(1, &triangle_buffer);
-  glBindBuffer(GL_ARRAY_BUFFER, triangle_buffer);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)nullptr);
-  glEnableVertexAttribArray(0);
-
-  return 0;
-}
-
-// Read a file into a GLchar[] and return
-const GLchar *WavesApp::read_shader_file(const char *path) {
-  FILE *file = fopen(path, "r");
-  if (file == nullptr) {
-    fprintf(stderr, "Can't open shader: %s\n", path);
-    return nullptr;
-  }
-  fseek(file, 0, SEEK_END);
-  long len = ftell(file);
-  fseek(file, 0, SEEK_SET);
-
-  GLchar *contents = new GLchar[len + 1];
-  fread(contents, sizeof(GLchar), len, file);
-  contents[len] = '\0';
-
-  fclose(file);
-
-  return contents;
-}
-
-// Load and compile a shader from file
-GLuint WavesApp::load_shader(const char *path, GLenum shader_type) {
-  const GLchar *contents = read_shader_file(path);
-  if (contents == nullptr) {
-    return 0;
-  }
-
-  GLuint shader = glCreateShader(shader_type);
-  glShaderSource(shader, 1, &contents, nullptr);
-  delete[] contents;
-
-  glCompileShader(shader);
-  GLint compiled;
-  glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-  if (!compiled) {
-    GLsizei info_len;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &info_len);
-    GLchar *info_log = new GLchar[info_len + 1];
-    glGetShaderInfoLog(shader, info_len, &info_len, info_log);
-    fprintf(stderr, "Error compiling shader %s: %s\n", path, info_log);
-    delete[] info_log;
-    return 0;
-  }
-
-  return shader;
-}
-
-// Load vertex and fragment shaders into a program
-GLuint WavesApp::create_program(GLuint vertex_shader, GLuint frag_shader) {
-  GLuint program = glCreateProgram();
-
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, frag_shader);
-
-  glLinkProgram(program);
-
-  GLint linked;
-  glGetProgramiv(program, GL_LINK_STATUS, &linked);
-  if (!linked) {
-    GLsizei info_len;
-    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &info_len);
-    GLchar *info_log = new GLchar[info_len + 1];
-    glGetProgramInfoLog(program, info_len, &info_len, info_log);
-    fprintf(stderr, "Error linking shaders: %s\n", info_log);
-    delete[] info_log;
-    return 0;
-  }
-
-  return program;
-}
-
-// Setup the simulation and display programs
-int WavesApp::init_programs() {
-  vertex_shader = load_shader("/home/edward/Documents/waves_sim/shaders/screen_cover.vert", GL_VERTEX_SHADER);
-  sim_shader = load_shader("/home/edward/Documents/waves_sim/shaders/wave_sim.frag", GL_FRAGMENT_SHADER);
-  display_shader = load_shader("/home/edward/Documents/waves_sim/shaders/display.frag", GL_FRAGMENT_SHADER);
-
-  if(!vertex_shader || !sim_shader || !display_shader) {
-    return -1;
-  }
-
-  sim_program = create_program(vertex_shader, sim_shader);
-  display_program = create_program(vertex_shader, display_shader);
-  if(!sim_program || !display_program) {
-    return -1;
-  }
-
-  // get uniform locations
-  sim_sim_tex_loc = glGetUniformLocation(sim_program, "sim_texture");
-  display_sim_tex_loc = glGetUniformLocation(display_program, "sim_texture");
-  display_screen_size_loc = glGetUniformLocation(display_program, "screen_size");
-
-  delta_x_loc = glGetUniformLocation(sim_program, "delta_x");
-  delta_t_loc = glGetUniformLocation(sim_program, "delta_t");
-  time_loc = glGetUniformLocation(sim_program, "time");
-
-  return 0;
-}
-
 // Create the two simulation textures and bind them to framebuffers
 int WavesApp::init_sim_texture() {
-  for(int i = 0; i < 2; i++) {
+  for (int i = 0; i < 2; i++) {
     // create framebuffer for sim program
     glGenFramebuffers(1, &sim_framebuffers[i]);
     glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[i]);
@@ -188,7 +70,8 @@ int WavesApp::init_sim_texture() {
     glActiveTexture(GL_TEXTURE0 + i);
     glGenTextures(1, &sim_textures[i]);
     glBindTexture(GL_TEXTURE_2D, sim_textures[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, sim_texture_size, sim_texture_size, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texture_width, texture_height, 0, GL_RGBA, GL_FLOAT,
+                 nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -207,7 +90,8 @@ int WavesApp::init_sim_texture() {
 }
 
 int WavesApp::init() {
-  return init_sdl_opengl() || init_sdl_window() || init_imgui() || init_vao() || init_sim_texture() || init_programs();
+  return init_sdl_opengl() || init_sdl_window() || init_imgui() || programs.init() ||
+         init_sim_texture();
 }
 
 int WavesApp::handle_sdl_events() {
@@ -219,7 +103,8 @@ int WavesApp::handle_sdl_events() {
     if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
         event.window.windowID == SDL_GetWindowID(window))
       return 1;
-    if(event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && event.window.windowID == SDL_GetWindowID(window)) {
+    if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED &&
+        event.window.windowID == SDL_GetWindowID(window)) {
       width = event.window.data1;
       height = event.window.data2;
     }
@@ -228,27 +113,34 @@ int WavesApp::handle_sdl_events() {
   return 0;
 }
 
-// draw the screen covering triangles
-void WavesApp::draw_quad() {
-  glBindVertexArray(vao);
-  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+// Draw the environment on the simulation texture
+void WavesApp::draw_environment() {
+  // Bind the last written (ie next to be read) framebuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture ? 0 : 1]);
+  glViewport(0, 0, (GLsizei)texture_width, (GLsizei)texture_height);
+
+  environment.draw(programs, glm::vec2(1.0 / ((float)texture_width * delta_x),
+                                       1.0 / ((float)texture_height * delta_x)));
 }
 
 // Run one step of the simulation
 void WavesApp::run_simulation() {
   // draw to target framebuffer
   glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture]);
-  glViewport(0, 0, sim_texture_size, sim_texture_size);
+  glViewport(0, 0, (GLsizei)texture_width, (GLsizei)texture_height);
 
-  glUseProgram(sim_program);
+  glUseProgram(programs.sim_program);
   // set program to read from texture not being written to
-  glUniform1i(sim_sim_tex_loc, current_sim_texture ? 0 : 1);
+  glUniform1i(programs.sim_sim_tex_loc, current_sim_texture ? 0 : 1);
 
-  glUniform1f(delta_x_loc, delta_x);
-  glUniform1f(delta_t_loc, delta_t);
-  glUniform1f(time_loc, time);
+  glUniform1f(programs.sim_delta_x_loc, delta_x);
+  glUniform1f(programs.sim_delta_t_loc, delta_t);
+  glUniform1f(programs.sim_time_loc, time);
 
-  draw_quad();
+  glUniformMatrix4fv(programs.sim_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(GeometryManager::square_screen_cover_transform));
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  programs.geo.draw_geo(GeometryType::Square);
   // swap sim textures
   current_sim_texture = current_sim_texture ? 0 : 1;
 
@@ -260,14 +152,18 @@ void WavesApp::run_display() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, width, height);
 
-  glUseProgram(display_program);
-  glUniform1i(display_sim_tex_loc, current_sim_texture);
-  glUniform2f(display_screen_size_loc, (GLfloat)width, (GLfloat)height);
-  draw_quad();
+  glUseProgram(programs.display_program);
+  glUniform1i(programs.display_sim_tex_loc, current_sim_texture ? 0 : 1);
+  glUniform2f(programs.display_screen_size_loc, (GLfloat)width, (GLfloat)height);
+
+  glUniformMatrix4fv(programs.display_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(GeometryManager::square_screen_cover_transform));
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  programs.geo.draw_geo(GeometryType::Square);
 }
 
 int WavesApp::draw_frame() {
-  if(handle_sdl_events()) {
+  if (handle_sdl_events()) {
     return 1;
   }
 
@@ -275,13 +171,14 @@ int WavesApp::draw_frame() {
   ImGui_ImplSDL2_NewFrame(window);
   ImGui::NewFrame();
 
+  draw_environment();
   // run simulation step
   run_simulation();
   // render state
   run_display();
 
   ImGui::Begin("Simulation Settings");
-  ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.1);
+  ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
   ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
   ImGui::End();
 
@@ -304,15 +201,21 @@ void WavesApp::shutdown() {
   SDL_Quit();
 }
 
+void WavesApp::add_object(std::unique_ptr<SimObject> object) {
+  environment.objects.push_back(std::move(object));
+}
+
 void webDrawFrame() {
   // TODO
 }
 
 int main() {
   WavesApp app{};
-  if(app.init()) {
+  if (app.init()) {
     return -1;
   }
+
+  app.add_object(std::make_unique<Rectangle>(-10.0, 18.0, 10.0, 18.5, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);

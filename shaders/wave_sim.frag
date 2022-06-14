@@ -15,30 +15,32 @@ float wave_c = 2.0;
 
 uniform float time;
 
-// Get the value of the wave at a point
-float get_value(ivec2 point) {
+// Get the value of the wave at a point. Point is the point to get, and u_neighbor is the value of the neighbor of point being considered. u_neighbor is returned if the point is a boundary.
+float get_value(ivec2 point, float u_neighbor) {
     ivec2 tex_size = textureSize(sim_texture, 0);
-    // if point is outside simulation area, fix wave value to closest point in area.
-    // This creates the boundry condition u_x = 0
-    if(point.x < 0) {
-        return texelFetch(sim_texture, ivec2(0, point.y), 0).x;
-    } else if (point.x >= tex_size.x) {
-        return texelFetch(sim_texture, ivec2(tex_size.x - 1, point.y), 0).x;
-    } else if(point.y < 0) {
-        return texelFetch(sim_texture, ivec2(point.x, 0), 0).x;
-    } else if (point.y >= tex_size.y) {
-        return texelFetch(sim_texture, ivec2(point.x, tex_size.y - 1), 0).x;
+    // if point is outside simulation area, fix wave value to u_neighbor.
+    // this creates the boundary condition u_x = 0
+    if(point.x < 0 || point.x >= tex_size.x || point.y < 0 || point.y >= tex_size.y) {
+        return u_neighbor;
     }
-    return texelFetch(sim_texture, point, 0).x;
+
+    // sample point
+    vec4 point_val = texelFetch(sim_texture, point, 0);
+    // if the alpha channel is non zero, this is a boundary with condition u_x = 0
+    if(point_val.a != 0.0) {
+        return u_neighbor;
+    }
+    // otherwise, we can use the sample point
+    return point_val.x;
 }
 
 // calculate the new u_tt value for a point based on its neighbors
 float calc_wave_eq(ivec2 point, float u_point) {
     // get neighbors and calculate laplacian (via second symmetric derivative)
-    float u0 = get_value(ivec2(point.x - 1, point.y));
-    float u1 = get_value(ivec2(point.x + 1, point.y));
-    float u2 = get_value(ivec2(point.x, point.y - 1));
-    float u3 = get_value(ivec2(point.x, point.y + 1));
+    float u0 = get_value(ivec2(point.x - 1, point.y), u_point);
+    float u1 = get_value(ivec2(point.x + 1, point.y), u_point);
+    float u2 = get_value(ivec2(point.x, point.y - 1), u_point);
+    float u3 = get_value(ivec2(point.x, point.y + 1), u_point);
 
     float laplace = (u0 + u1 + u2 + u3 - 4.0 * u_point) / (delta_x * delta_x);
 
@@ -46,8 +48,8 @@ float calc_wave_eq(ivec2 point, float u_point) {
 }
 
 void main() {
-    if(gl_FragCoord.x >= 127.0 && gl_FragCoord.x < 128.0 && gl_FragCoord.y >= 127.0 && gl_FragCoord.y < 128.0) {
-        color = vec4(1.0 * sin(time * 5.0), 0.0, 0.0, 1.0);
+    if(gl_FragCoord.x >= 511.0 && gl_FragCoord.x < 512.0 && gl_FragCoord.y >= 511.0 && gl_FragCoord.y < 512.0 && time < 2.5133) {
+        color = vec4(8.0 * exp(-0.5 * time) * sin(time * 5.0), 8.0 * (-0.5 * exp(-0.5 * time) * sin(5.0 * time) + 5.0 * exp(-0.5 * time) * cos(5.0 * time)), 0.0, 0.0);
     } else {
         vec4 point = texelFetch(sim_texture, ivec2(gl_FragCoord.xy), 0);
         float u = point.x;
@@ -58,6 +60,6 @@ void main() {
         u_t += u_tt * delta_t;
         u += u_t * delta_t;
 
-        color = vec4(u, u_t, 0.0, 1.0);
+        color = vec4(u, u_t, point.b, point.a);
     }
 }
