@@ -35,10 +35,10 @@ void GeometryManager::draw_geo(GeometryType geo) const {
 
   switch (geo) {
   case GeometryType::Point:
-    glDrawArrays(GL_POINT, 0, 1);
+    glDrawArrays(GL_POINTS, 0, 1);
     break;
   case GeometryType::Line:
-    glDrawArrays(GL_LINE, 0, 2);
+    glDrawArrays(GL_LINES, 0, 2);
     break;
   case GeometryType::Square:
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

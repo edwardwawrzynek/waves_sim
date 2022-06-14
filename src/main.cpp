@@ -205,12 +205,13 @@ void WavesApp::add_object(std::unique_ptr<SimObject> object) {
   environment.objects.push_back(std::move(object));
 }
 
+WavesApp app{};
+
 void webDrawFrame() {
-  // TODO
+  app.draw_frame();
 }
 
 int main() {
-  WavesApp app{};
   if (app.init()) {
     return -1;
   }
