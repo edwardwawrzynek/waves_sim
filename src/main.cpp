@@ -136,6 +136,7 @@ void WavesApp::run_simulation() {
   glUniform1f(programs.sim_delta_x_loc, delta_x);
   glUniform1f(programs.sim_delta_t_loc, delta_t);
   glUniform1f(programs.sim_time_loc, time);
+  glUniform1f(programs.sim_wave_speed_vacuum_loc, wave_speed_vacuum);
 
   glUniformMatrix4fv(programs.sim_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
@@ -207,16 +208,16 @@ void WavesApp::add_object(std::unique_ptr<SimObject> object) {
 
 WavesApp app{};
 
-void webDrawFrame() {
-  app.draw_frame();
-}
+void webDrawFrame() { app.draw_frame(); }
 
 int main() {
   if (app.init()) {
     return -1;
   }
 
-  app.add_object(std::make_unique<Rectangle>(-10.0, 18.0, 10.0, 18.5, MediumType::Boundary()));
+  app.add_object(std::make_unique<AreaClear>());
+  app.add_object(std::make_unique<Rectangle>(-15.0, 10.0, 15.0, 25.0, MediumType::Medium(2.5)));
+  app.add_object(std::make_unique<Rectangle>(-15.0, -15.0, 15.0, -20.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);

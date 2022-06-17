@@ -73,6 +73,7 @@ public:
   GLint sim_delta_x_loc{};
   GLint sim_delta_t_loc{};
   GLint sim_time_loc{};
+  GLint sim_wave_speed_vacuum_loc{};
 
   // transform matrix location
   GLint sim_transform_loc{};
@@ -80,7 +81,8 @@ public:
   GLint object_transform_loc{};
 
   // object parameter locations
-  GLint object_wave_speed_loc{};
+  GLint object_inv_ior_loc{};
+  GLint object_boundary_value_loc{};
 
   // geometry primitives
   GeometryManager geo{};
@@ -102,9 +104,9 @@ public:
 class MediumType {
 public:
   bool is_boundary;
-  float wave_speed;
+  float ior;
 
-  static MediumType Medium(float wave_speed);
+  static MediumType Medium(float index_of_refraction);
   static MediumType Boundary();
 
   // setup the appropriate glColorMask for this medium
@@ -112,9 +114,12 @@ public:
   // Set the object_program uniforms for this medium
   void set_object_uniforms(const Programs &programs) const;
 
+  // Setup gl program, uniforms, and glColorMask to render this medium
+  void set_gl_program(const Programs &programs) const;
+
 private:
-  MediumType(bool is_boundary, float wave_speed)
-      : is_boundary(is_boundary), wave_speed(wave_speed){};
+  MediumType(bool is_boundary, float index_of_refraction)
+      : is_boundary(is_boundary), ior(index_of_refraction){};
 };
 
 // An object that is draw to the simulation texture, either a source, medium, or boundary.
@@ -145,6 +150,14 @@ public:
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
       : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
+};
+
+// An object that clears all media and boundaries in the simulation area
+class AreaClear : public SimObject {
+public:
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor) const override;
+
+  AreaClear() = default;
 };
 
 #endif

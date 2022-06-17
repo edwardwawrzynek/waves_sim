@@ -38,11 +38,13 @@ class WavesApp {
   size_t texture_width{1024}, texture_height{1024};
 
   // Time step size for simulation (in s).
-  float delta_t{0.005};
+  float delta_t{0.01};
   // Current time (in s)
   float time{0.0};
   // Physical size of each texel (in m)
   float delta_x{0.04};
+  // Wave speed in free space (in m/s)
+  float wave_speed_vacuum{2.0};
 
   // gl programs and geometry
   Programs programs{};

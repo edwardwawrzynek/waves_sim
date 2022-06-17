@@ -21,4 +21,8 @@ void main() {
     } else {
         color = vec4(0.0, 0.0, -point.x, 1.0);
     }
+    // lightly highlight areas with non-1 index of refraction in green
+    if(point.b < 1.0) {
+        color.g = 0.25 - 0.25 * point.b;
+    }
 }

@@ -150,12 +150,14 @@ int Programs::init() {
   sim_delta_x_loc = glGetUniformLocation(sim_program, "delta_x");
   sim_delta_t_loc = glGetUniformLocation(sim_program, "delta_t");
   sim_time_loc = glGetUniformLocation(sim_program, "time");
+  sim_wave_speed_vacuum_loc = glGetUniformLocation(sim_program, "wave_speed_vacuum");
 
   sim_transform_loc = glGetUniformLocation(sim_program, "transform");
   display_transform_loc = glGetUniformLocation(display_program, "transform");
   object_transform_loc = glGetUniformLocation(object_program, "transform");
 
-  object_wave_speed_loc = glGetUniformLocation(object_program, "wave_speed");
+  object_inv_ior_loc = glGetUniformLocation(object_program, "ior_inv");
+  object_boundary_value_loc = glGetUniformLocation(object_program, "boundary_value");
 
   return 0;
 }
@@ -169,10 +171,19 @@ void MediumType::set_gl_color_mask() const {
 }
 
 void MediumType::set_object_uniforms(const Programs &programs) const {
-  glUniform1f(programs.object_wave_speed_loc, wave_speed);
+  glUniform1f(programs.object_inv_ior_loc, 1.0 / ior);
+  glUniform1f(programs.object_boundary_value_loc, 1.0);
 }
 
-MediumType MediumType::Medium(float wave_speed) { return MediumType(false, wave_speed); }
+void MediumType::set_gl_program(const Programs &programs) const {
+  glUseProgram(programs.object_program);
+  set_gl_color_mask();
+  set_object_uniforms(programs);
+}
+
+MediumType MediumType::Medium(float index_of_refraction) {
+  return MediumType(false, index_of_refraction);
+}
 
 MediumType MediumType::Boundary() { return MediumType(true, 0); }
 
@@ -183,10 +194,7 @@ void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor
 }
 
 void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor) const {
-  glUseProgram(programs.object_program);
-
-  medium.set_gl_color_mask();
-  medium.set_object_uniforms(programs);
+  medium.set_gl_program(programs);
 
   auto transform =
       glm::scale(glm::translate(glm::mat4(1.0f),
@@ -194,5 +202,17 @@ void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor) 
                  glm::vec3(x1 - x0, y1 - y0, 1.0) * glm::vec3(physical_scale_factor, 1.0));
 
   glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE, glm::value_ptr(transform));
+  programs.geo.draw_geo(GeometryType::Square);
+}
+
+void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor) const {
+  glUseProgram(programs.object_program);
+  glUniform1f(programs.object_inv_ior_loc, 1.0);
+  glUniform1f(programs.object_boundary_value_loc, 0.0);
+
+  glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
+
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(GeometryManager::square_screen_cover_transform));
   programs.geo.draw_geo(GeometryType::Square);
 }
