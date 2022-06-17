@@ -1,5 +1,7 @@
 #include "geometry.hpp"
 
+#define PI 3.141592653589793
+
 void GeometryManager::init_geometry() {
   GLfloat point_vertex[2] = {0.0, 0.0};
   GLfloat line_vertices[2][2] = {{0.0, 0.0}, {1.0, 0.0}};
@@ -156,8 +158,7 @@ int Programs::init() {
   display_transform_loc = glGetUniformLocation(display_program, "transform");
   object_transform_loc = glGetUniformLocation(object_program, "transform");
 
-  object_inv_ior_loc = glGetUniformLocation(object_program, "ior_inv");
-  object_boundary_value_loc = glGetUniformLocation(object_program, "boundary_value");
+  object_object_props_loc = glGetUniformLocation(object_program, "object_props");
 
   return 0;
 }
@@ -171,8 +172,7 @@ void MediumType::set_gl_color_mask() const {
 }
 
 void MediumType::set_object_uniforms(const Programs &programs) const {
-  glUniform1f(programs.object_inv_ior_loc, 1.0 / ior);
-  glUniform1f(programs.object_boundary_value_loc, 1.0);
+  glUniform4f(programs.object_object_props_loc, 0.0, 0.0, 1.0 / ior, 1.0);
 }
 
 void MediumType::set_gl_program(const Programs &programs) const {
@@ -187,13 +187,14 @@ MediumType MediumType::Medium(float index_of_refraction) {
 
 MediumType MediumType::Boundary() { return MediumType(true, 0); }
 
-void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor) const {
+void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor,
+                       float time) const {
   for (const auto &obj : objects) {
-    obj->draw(programs, physical_scale_factor);
+    obj->draw(programs, physical_scale_factor, time);
   }
 }
 
-void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor) const {
+void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   medium.set_gl_program(programs);
 
   auto transform =
@@ -205,14 +206,40 @@ void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor) 
   programs.geo.draw_geo(GeometryType::Square);
 }
 
-void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor) const {
+void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   glUseProgram(programs.object_program);
-  glUniform1f(programs.object_inv_ior_loc, 1.0);
-  glUniform1f(programs.object_boundary_value_loc, 0.0);
+  glUniform4f(programs.object_object_props_loc, 0.0, 0.0, 1.0, 0.0);
 
   glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
 
   glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
   programs.geo.draw_geo(GeometryType::Square);
+}
+
+void Waveform::set_gl_program(const Programs &programs, float time, float phase) const {
+  glUseProgram(programs.object_program);
+  glUniform4f(programs.object_object_props_loc, sample(time, phase), sample_diff(time, phase), 0.0,
+              0.0);
+
+  glColorMask(GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE);
+}
+
+float SineWaveform::sample(float time, float phase) const {
+  return amp * sin(2.0 * PI * freq * time + phase);
+}
+
+float SineWaveform::sample_diff(float time, float phase) const {
+  return amp * 2.0 * PI * freq * cos(2.0 * PI * freq * time + phase);
+}
+
+void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
+                       float time) const {
+  waveform->set_gl_program(programs, time, 0.0);
+
+  auto transform =
+      glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0) * glm::vec3(physical_scale_factor, 1.0));
+
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE, glm::value_ptr(transform));
+  programs.geo.draw_geo(GeometryType::Point);
 }

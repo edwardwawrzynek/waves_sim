@@ -81,8 +81,7 @@ public:
   GLint object_transform_loc{};
 
   // object parameter locations
-  GLint object_inv_ior_loc{};
-  GLint object_boundary_value_loc{};
+  GLint object_object_props_loc{};
 
   // geometry primitives
   GeometryManager geo{};
@@ -125,7 +124,8 @@ private:
 // An object that is draw to the simulation texture, either a source, medium, or boundary.
 class SimObject {
 public:
-  virtual void draw(const Programs &programs, glm::vec2 physical_scale_factor) const = 0;
+  virtual void draw(const Programs &programs, glm::vec2 physical_scale_factor,
+                    float time) const = 0;
   virtual ~SimObject() = default;
 };
 
@@ -133,9 +133,17 @@ class Environment {
 public:
   std::vector<std::unique_ptr<SimObject>> objects{};
 
-  void draw(const Programs &programs, glm::vec2 physical_scale_factor) const;
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const;
 
   Environment() = default;
+};
+
+// An object that clears all media and boundaries in the simulation area
+class AreaClear : public SimObject {
+public:
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+
+  AreaClear() = default;
 };
 
 // A rectangular area defined by two corners
@@ -145,19 +153,54 @@ public:
   float x0, y0, x1, y1;
   MediumType medium;
 
-  void draw(const Programs &programs, glm::vec2 physical_scale_factor) const override;
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
 
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
       : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
 };
 
-// An object that clears all media and boundaries in the simulation area
-class AreaClear : public SimObject {
+// A waveform describes the intensity of a source over time.
+class Waveform {
 public:
-  void draw(const Programs &programs, glm::vec2 physical_scale_factor) const override;
+  // Waveforms are sampled over both time (s) and phase (rad). For a constant amplitude wave,
+  // these correspond to the same thing. for a wave with time dependent amplitude (such as a pulse
+  // envelope), phase should change the phase of the carrier but not of any envelope.
+  // For example, an implementation of an am signal might be:
+  // signal(time) * cos(carrier_freq * time + phase
+  virtual float sample(float time, float phase) const = 0;
+  // Return the time derivative (df/dt) of sample
+  virtual float sample_diff(float time, float phase) const = 0;
 
-  AreaClear() = default;
+  // Setup the gl program to draw this waveform on a source
+  void set_gl_program(const Programs &programs, float time, float phase) const;
+
+  virtual ~Waveform() = default;
+};
+
+// A sine wave
+class SineWaveform : public Waveform {
+public:
+  // Amplitude and frequency (Hz) of wave
+  float amp, freq;
+
+  float sample(float time, float phase) const override;
+  float sample_diff(float time, float phase) const override;
+
+  SineWaveform(float amplitude, float frequency) : amp(amplitude), freq(frequency){};
+};
+
+// A point wave source
+class PointSource : public SimObject {
+public:
+  // location
+  float x, y;
+  std::unique_ptr<Waveform> waveform;
+
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+
+  PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
+      : x(x), y(y), waveform(std::move(waveform)){};
 };
 
 #endif

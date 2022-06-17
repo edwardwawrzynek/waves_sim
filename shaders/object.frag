@@ -4,20 +4,17 @@ precision highp int;
 
 // This shader draws objects to the simulation texture. Depending on which channels are enabled by
 // glColorMask, it will do the following:
-// * red/green: none (TODO)
-// * blue: set the texel to be a medium with a given index of refraction
+// * red/green: set the value and derivative of a point
+// * blue: set the texel to be a medium with the given inverse index of refraction
 // * alpha: set the texel to be a boundary
 //
 // Only one of the channel combinations above should be enabled at a time.
 
 out vec4 color;
 
-// Inverse index of refraction to write
-uniform float ior_inv;
-
-// Boundary value texel to write
-uniform float boundary_value;
+// Color to write: (u, u_t, inv_ior, boundary)
+uniform vec4 object_props;
 
 void main() {
-    color = vec4(0.0, 0.0, ior_inv, boundary_value);
+    color = object_props;
 }

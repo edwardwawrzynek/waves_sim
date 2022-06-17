@@ -48,19 +48,15 @@ float calc_wave_eq(ivec2 point, float u_point, float wave_speed) {
 }
 
 void main() {
-    if(gl_FragCoord.x >= 511.0 && gl_FragCoord.x < 512.0 && gl_FragCoord.y >= 511.0 && gl_FragCoord.y < 512.0) {
-        color = vec4(6.0 * sin(time * 5.0), 8.0 * (-0.5 * exp(-0.5 * time) * sin(5.0 * time) + 5.0 * exp(-0.5 * time) * cos(5.0 * time)), 0.0, 0.0);
-    } else {
-        vec4 point = texelFetch(sim_texture, ivec2(gl_FragCoord.xy), 0);
-        float u = point.x;
-        float u_t = point.y;
-        float ior_inv = point.z;
+    vec4 point = texelFetch(sim_texture, ivec2(gl_FragCoord.xy), 0);
+    float u = point.x;
+    float u_t = point.y;
+    float ior_inv = point.z;
 
-        float u_tt = calc_wave_eq(ivec2(gl_FragCoord.xy), u, ior_inv * wave_speed_vacuum);
+    float u_tt = calc_wave_eq(ivec2(gl_FragCoord.xy), u, ior_inv * wave_speed_vacuum);
 
-        u_t += u_tt * delta_t;
-        u += u_t * delta_t;
+    u_t += u_tt * delta_t;
+    u += u_t * delta_t;
 
-        color = vec4(u, u_t, point.b, point.a);
-    }
+    color = vec4(u, u_t, point.b, point.a);
 }

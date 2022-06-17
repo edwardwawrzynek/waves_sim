@@ -119,8 +119,10 @@ void WavesApp::draw_environment() {
   glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture ? 0 : 1]);
   glViewport(0, 0, (GLsizei)texture_width, (GLsizei)texture_height);
 
-  environment.draw(programs, glm::vec2(1.0 / ((float)texture_width * delta_x),
-                                       1.0 / ((float)texture_height * delta_x)));
+  environment.draw(
+      programs,
+      glm::vec2(1.0 / ((float)texture_width * delta_x), 1.0 / ((float)texture_height * delta_x)),
+      time);
 }
 
 // Run one step of the simulation
@@ -216,8 +218,9 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
-  app.add_object(std::make_unique<Rectangle>(-15.0, 10.0, 15.0, 25.0, MediumType::Medium(2.5)));
-  app.add_object(std::make_unique<Rectangle>(-15.0, -15.0, 15.0, -20.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
+  app.add_object(
+      std::make_unique<PointSource>(15.0, 0.0, std::make_unique<SineWaveform>(6.0, 0.9)));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);
