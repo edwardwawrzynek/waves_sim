@@ -53,6 +53,8 @@ class Programs {
   GLuint display_shader{};
   // fragment shader that draws objects
   GLuint object_shader{};
+  // fragment shader that draws editing handles
+  GLuint handle_shader{};
 
 public:
   // program that runs simulation step
@@ -61,6 +63,8 @@ public:
   GLuint display_program{};
   // program that draw sim objects
   GLuint object_program{};
+  // program that draws editing handles
+  GLuint handle_program{};
 
   // uniform location for sim_texture in sim_program
   GLint sim_sim_tex_loc{};
@@ -82,6 +86,10 @@ public:
 
   // object parameter locations
   GLint object_object_props_loc{};
+
+  // handle uniform locations
+  GLint handle_hole_loc{};
+  GLint handle_selected_loc{};
 
   // geometry primitives
   GeometryManager geo{};
@@ -124,8 +132,11 @@ private:
 // An object that is draw to the simulation texture, either a source, medium, or boundary.
 class SimObject {
 public:
+  // draw the object to the simulation texture
   virtual void draw(const Programs &programs, glm::vec2 physical_scale_factor,
                     float time) const = 0;
+  // draw the object's editing controls to the display
+  virtual void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
   virtual ~SimObject() = default;
 };
 
@@ -134,6 +145,7 @@ public:
   std::vector<std::unique_ptr<SimObject>> objects{};
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
 
   Environment() = default;
 };
@@ -154,6 +166,7 @@ public:
   MediumType medium;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const override;
 
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
@@ -198,6 +211,7 @@ public:
   std::unique_ptr<Waveform> waveform;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const override;
 
   PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
       : x(x), y(y), waveform(std::move(waveform)){};

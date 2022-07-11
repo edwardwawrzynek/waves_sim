@@ -132,15 +132,18 @@ int Programs::init() {
       load_shader("/home/edward/Documents/waves_sim/shaders/display.frag", GL_FRAGMENT_SHADER);
   object_shader =
       load_shader("/home/edward/Documents/waves_sim/shaders/object.frag", GL_FRAGMENT_SHADER);
+  handle_shader =
+      load_shader("/home/edward/Documents/waves_sim/shaders/handle.frag", GL_FRAGMENT_SHADER);
 
-  if (!vertex_shader || !sim_shader || !display_shader || !object_shader) {
+  if (!vertex_shader || !sim_shader || !display_shader || !object_shader || !handle_shader) {
     return -1;
   }
 
   sim_program = create_program(vertex_shader, sim_shader);
   display_program = create_program(vertex_shader, display_shader);
   object_program = create_program(vertex_shader, object_shader);
-  if (!sim_program || !display_program || !object_shader) {
+  handle_program = create_program(vertex_shader, handle_shader);
+  if (!sim_program || !display_program || !object_shader || !handle_program) {
     return -1;
   }
 
@@ -159,6 +162,9 @@ int Programs::init() {
   object_transform_loc = glGetUniformLocation(object_program, "transform");
 
   object_object_props_loc = glGetUniformLocation(object_program, "object_props");
+
+  handle_hole_loc = glGetUniformLocation(handle_program, "hole");
+  handle_selected_loc = glGetUniformLocation(handle_program, "selected");
 
   return 0;
 }
@@ -187,10 +193,20 @@ MediumType MediumType::Medium(float index_of_refraction) {
 
 MediumType MediumType::Boundary() { return MediumType(true, 0); }
 
+void SimObject::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+  // by default, don't draw any controls
+}
+
 void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
   for (const auto &obj : objects) {
     obj->draw(programs, physical_scale_factor, time);
+  }
+}
+
+void Environment::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+  for (const auto &obj : objects) {
+    obj->draw_controls(programs, physical_scale_factor);
   }
 }
 
@@ -204,6 +220,31 @@ void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor, 
 
   glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE, glm::value_ptr(transform));
   programs.geo.draw_geo(GeometryType::Square);
+}
+
+// create the transformation matrix for a translation from the origin to the specified x and y
+static glm::mat4 translate_to_point(float x, float y, glm::vec2 physical_scale_factor) {
+  return glm::translate(glm::mat4(1.0f),
+                        glm::vec3(x, y, 0.0) * glm::vec3(physical_scale_factor, 1.0));
+}
+
+// draw a gl point at the given physical coordinates
+static void draw_point(const Programs &programs, float x, float y,
+                       glm::vec2 physical_scale_factor) {
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(translate_to_point(x, y, physical_scale_factor)));
+  programs.geo.draw_geo(GeometryType::Point);
+}
+
+void Rectangle::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+  glUseProgram(programs.handle_program);
+  glPointSize(12);
+  glUniform1i(programs.handle_hole_loc, 0);
+
+  draw_point(programs, x0, y0, physical_scale_factor);
+  draw_point(programs, x0, y1, physical_scale_factor);
+  draw_point(programs, x1, y0, physical_scale_factor);
+  draw_point(programs, x1, y1, physical_scale_factor);
 }
 
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
@@ -236,10 +277,14 @@ float SineWaveform::sample_diff(float time, float phase) const {
 void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
   waveform->set_gl_program(programs, time, 0.0);
+  glPointSize(1);
+  draw_point(programs, x, y, physical_scale_factor);
+}
 
-  auto transform =
-      glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0) * glm::vec3(physical_scale_factor, 1.0));
+void PointSource::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+  glUseProgram(programs.handle_program);
+  glPointSize(16);
+  glUniform1i(programs.handle_hole_loc, 1);
 
-  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE, glm::value_ptr(transform));
-  programs.geo.draw_geo(GeometryType::Point);
+  draw_point(programs, x, y, physical_scale_factor);
 }

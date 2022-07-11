@@ -113,16 +113,17 @@ int WavesApp::handle_sdl_events() {
   return 0;
 }
 
+glm::vec2 WavesApp::get_scale_factor() const {
+  return glm::vec2(1.0 / ((float)texture_width * delta_x), 1.0 / ((float)texture_height * delta_x));
+}
+
 // Draw the environment on the simulation texture
 void WavesApp::draw_environment() {
   // Bind the last written (ie next to be read) framebuffer
   glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture ? 0 : 1]);
   glViewport(0, 0, (GLsizei)texture_width, (GLsizei)texture_height);
 
-  environment.draw(
-      programs,
-      glm::vec2(1.0 / ((float)texture_width * delta_x), 1.0 / ((float)texture_height * delta_x)),
-      time);
+  environment.draw(programs, get_scale_factor(), time);
 }
 
 // Run one step of the simulation
@@ -165,6 +166,13 @@ void WavesApp::run_display() {
   programs.geo.draw_geo(GeometryType::Square);
 }
 
+void WavesApp::draw_env_controls() {
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, width, height);
+
+  environment.draw_controls(programs, get_scale_factor());
+}
+
 int WavesApp::draw_frame() {
   if (handle_sdl_events()) {
     return 1;
@@ -179,6 +187,8 @@ int WavesApp::draw_frame() {
   run_simulation();
   // render state
   run_display();
+
+  draw_env_controls();
 
   ImGui::Begin("Simulation Settings");
   ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
@@ -218,9 +228,9 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
-  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
-  app.add_object(
-      std::make_unique<PointSource>(15.0, 0.0, std::make_unique<SineWaveform>(6.0, 0.9)));
+  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 3.0)));
+  app.add_object(std::make_unique<PointSource>(5.0, 0.0, std::make_unique<SineWaveform>(6.0, 2.7)));
+  app.add_object(std::make_unique<Rectangle>(15.0, 15.0, 20.0, 25.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);

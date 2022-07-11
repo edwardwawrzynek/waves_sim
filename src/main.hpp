@@ -64,12 +64,17 @@ class WavesApp {
   // Handle window events, and return non zero if program should quit
   int handle_sdl_events();
 
+  // Get the factor by which physical coordinates are scaled to screen coordinates
+  glm::vec2 get_scale_factor() const;
+
   // Draw the environment onto the last written sim texture
   void draw_environment();
   // Run one step of the simulation program, rendering the new state onto the current texture
   void run_simulation();
   // Render the state of the last written sim texture
   void run_display();
+  // Render simulation environment controls
+  void draw_env_controls();
 
 public:
   WavesApp() = default;
