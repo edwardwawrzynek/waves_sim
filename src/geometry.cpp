@@ -171,7 +171,7 @@ int Programs::init() {
 
 void MediumType::set_gl_color_mask() const {
   if (is_boundary) {
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_FALSE, GL_TRUE);
   } else {
     glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_FALSE);
   }
@@ -193,8 +193,14 @@ MediumType MediumType::Medium(float index_of_refraction) {
 
 MediumType MediumType::Boundary() { return MediumType(true, 0); }
 
-void SimObject::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+void SimObject::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                              bool active) const {
   // by default, don't draw any controls
+}
+
+bool SimObject::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+  // by default, don't use any events
+  return false;
 }
 
 void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor,
@@ -205,8 +211,30 @@ void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor
 }
 
 void Environment::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
-  for (const auto &obj : objects) {
-    obj->draw_controls(programs, physical_scale_factor);
+  for (size_t i = 0; i < objects.size(); i++) {
+    objects[i]->draw_controls(programs, physical_scale_factor, i == active_object);
+  }
+}
+
+void Environment::handle_events(glm::vec2 delta_x, glm::vec2 screen_size) {
+  // allow active object to capture events first
+  if (active_object >= 0 && active_object < objects.size()) {
+    // check if the events cause deactivation
+    if (!objects[active_object]->handle_events(delta_x, true, screen_size)) {
+      active_object = -1;
+    }
+    // active object stayed active, so no need to pass events to other objects
+    else {
+      return;
+    }
+  }
+
+  // check events on each object, stopping if the events make an object active
+  for (size_t i = 0; i < objects.size(); i++) {
+    if (objects[i]->handle_events(delta_x, false, screen_size)) {
+      active_object = i;
+      break;
+    }
   }
 }
 
@@ -236,15 +264,87 @@ static void draw_point(const Programs &programs, float x, float y,
   programs.geo.draw_geo(GeometryType::Point);
 }
 
-void Rectangle::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+const int rectangle_handle_size = 12;
+
+void Rectangle::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                              bool active) const {
   glUseProgram(programs.handle_program);
-  glPointSize(12);
+  glPointSize(rectangle_handle_size);
   glUniform1i(programs.handle_hole_loc, 0);
+  glUniform1i(programs.handle_selected_loc, active);
 
   draw_point(programs, x0, y0, physical_scale_factor);
   draw_point(programs, x0, y1, physical_scale_factor);
   draw_point(programs, x1, y0, physical_scale_factor);
   draw_point(programs, x1, y1, physical_scale_factor);
+}
+
+// check if a mouse position is within the given pixel rectangle
+static bool pixel_pos_in_rect(ImVec2 pos, glm::vec2 c0, glm::vec2 c1) {
+  return pos.x >= c0.x && pos.x < c1.x && pos.y >= c0.y && pos.y < c1.y;
+}
+
+// check if a mouse position is within a handle
+static bool pixel_pos_in_handle(ImVec2 pos, glm::vec2 pixel_handle_center, int handle_size) {
+  return pixel_pos_in_rect(pos,
+                           pixel_handle_center - glm::vec2(handle_size / 2.0, handle_size / 2.0),
+                           pixel_handle_center + glm::vec2(handle_size / 2.0, handle_size / 2.0));
+}
+
+static glm::vec2 physical_pos_to_pixel(float x, float y, glm::vec2 delta_x, glm::vec2 screen_size) {
+  return glm::vec2(x / delta_x.x + screen_size.x / 2.0, -y / delta_x.y + screen_size.y / 2.0);
+}
+
+static glm::vec2 pixel_pos_to_physical(const ImVec2 &mouse_pos, glm::vec2 delta_x,
+                                       glm::vec2 screen_size) {
+  return glm::vec2((mouse_pos.x - screen_size.x / 2.0) * delta_x.x,
+                   -(mouse_pos.y - screen_size.y / 2.0) * delta_x.y);
+}
+
+// handle events for a handle located at physical coordinates (x, y)
+static bool handle_handle_events(glm::vec2 delta_x, bool active, float &x, float &y,
+                                 int handle_size, glm::vec2 screen_size) {
+  if (!ImGui::IsMousePosValid()) {
+    return active;
+  }
+
+  const auto &mouse_pos = ImGui::GetMousePos();
+  // if mouse was clicked this frame
+  const bool clicked = ImGui::IsMouseClicked(0);
+
+  const auto &drag_delta = ImGui::GetMouseDragDelta(0);
+  // if mouse is being dragged this frame
+  const bool dragged = drag_delta.x != 0 || drag_delta.y != 0;
+
+  bool mouse_in_handle = pixel_pos_in_handle(
+      mouse_pos, physical_pos_to_pixel(x, y, delta_x, screen_size), handle_size);
+
+  if (clicked && mouse_in_handle) {
+    active = true;
+  }
+
+  if (active) {
+    if (dragged) {
+      // handle is being dragged, so adjust positioning
+      const auto &new_pos = pixel_pos_to_physical(mouse_pos, delta_x, screen_size);
+      x = new_pos.x;
+      y = new_pos.y;
+    } else {
+      // if a click happened outside this handle, deactivate
+      if (clicked && !mouse_in_handle) {
+        active = false;
+      }
+    }
+  }
+
+  return active;
+}
+
+bool Rectangle::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+  return handle_handle_events(delta_x, active, x0, y0, rectangle_handle_size, screen_size) ||
+         handle_handle_events(delta_x, active, x1, y0, rectangle_handle_size, screen_size) ||
+         handle_handle_events(delta_x, active, x0, y1, rectangle_handle_size, screen_size) ||
+         handle_handle_events(delta_x, active, x1, y1, rectangle_handle_size, screen_size);
 }
 
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
@@ -281,10 +381,18 @@ void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor
   draw_point(programs, x, y, physical_scale_factor);
 }
 
-void PointSource::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
+const int point_handle_size = 16;
+
+void PointSource::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                                bool active) const {
   glUseProgram(programs.handle_program);
-  glPointSize(16);
+  glPointSize(point_handle_size);
   glUniform1i(programs.handle_hole_loc, 1);
+  glUniform1i(programs.handle_selected_loc, active);
 
   draw_point(programs, x, y, physical_scale_factor);
+}
+
+bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+  return handle_handle_events(delta_x, active, x, y, point_handle_size, screen_size);
 }

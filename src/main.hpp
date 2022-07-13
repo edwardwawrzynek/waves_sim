@@ -41,7 +41,7 @@ class WavesApp {
   float delta_t{0.01};
   // Current time (in s)
   float time{0.0};
-  // Physical size of each texel (in m)
+  // Physical size of each texel (in m/texel)
   float delta_x{0.04};
   // Wave speed in free space (in m/s)
   float wave_speed_vacuum{2.0};

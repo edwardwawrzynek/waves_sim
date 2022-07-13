@@ -114,7 +114,7 @@ int WavesApp::handle_sdl_events() {
 }
 
 glm::vec2 WavesApp::get_scale_factor() const {
-  return glm::vec2(1.0 / ((float)texture_width * delta_x), 1.0 / ((float)texture_height * delta_x));
+  return glm::vec2(2.0 / ((float)texture_width * delta_x), 2.0 / ((float)texture_height * delta_x));
 }
 
 // Draw the environment on the simulation texture
@@ -171,6 +171,10 @@ void WavesApp::draw_env_controls() {
   glViewport(0, 0, width, height);
 
   environment.draw_controls(programs, get_scale_factor());
+
+  environment.handle_events(glm::vec2(delta_x * (float)texture_width / (float)width,
+                                      delta_x * (float)texture_height / (float)height),
+                            glm::vec2(width, height));
 }
 
 int WavesApp::draw_frame() {
@@ -187,13 +191,15 @@ int WavesApp::draw_frame() {
   run_simulation();
   // render state
   run_display();
-
+  // handle environment controls
   draw_env_controls();
 
   ImGui::Begin("Simulation Settings");
   ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
   ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
   ImGui::End();
+
+  ImGui::ShowDemoWindow();
 
   // render imgui
   ImGui::Render();
@@ -230,7 +236,7 @@ int main() {
   app.add_object(std::make_unique<AreaClear>());
   app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 3.0)));
   app.add_object(std::make_unique<PointSource>(5.0, 0.0, std::make_unique<SineWaveform>(6.0, 2.7)));
-  app.add_object(std::make_unique<Rectangle>(15.0, 15.0, 20.0, 25.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);

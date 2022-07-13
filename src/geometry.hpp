@@ -2,6 +2,7 @@
 #define GEOMETRY_H
 
 #include <SDL.h>
+#include <imgui.h>
 #include <memory>
 #include <vector>
 #if defined(__EMSCRIPTEN__)
@@ -136,16 +137,23 @@ public:
   virtual void draw(const Programs &programs, glm::vec2 physical_scale_factor,
                     float time) const = 0;
   // draw the object's editing controls to the display
-  virtual void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
+  virtual void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                             bool active) const;
+  // handle any imgui io events affecting the object. active is true if the object is selected. If
+  // the object is selected or the event caused the object to be selected, return true. If the
+  // object isn't selected, return false.
+  virtual bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size);
   virtual ~SimObject() = default;
 };
 
 class Environment {
 public:
   std::vector<std::unique_ptr<SimObject>> objects{};
+  int active_object{-1};
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
+  void handle_events(glm::vec2 delta_x, glm::vec2 screen_size);
 
   Environment() = default;
 };
@@ -166,7 +174,9 @@ public:
   MediumType medium;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
-  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                     bool active) const override;
+  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
 
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
@@ -211,7 +221,9 @@ public:
   std::unique_ptr<Waveform> waveform;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
-  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                     bool active) const override;
+  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
 
   PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
       : x(x), y(y), waveform(std::move(waveform)){};
