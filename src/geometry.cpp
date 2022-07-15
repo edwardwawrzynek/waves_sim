@@ -6,8 +6,9 @@ void GeometryManager::init_geometry() {
   GLfloat point_vertex[2] = {0.0, 0.0};
   GLfloat line_vertices[2][2] = {{0.0, 0.0}, {1.0, 0.0}};
   GLfloat square_vertices[4][2] = {{0.0, 1.0}, {1.0, 1.0}, {0.0, 0.0}, {1.0, 0.0}};
+  GLfloat square_line_vertices[5][2] = {{0.0, 0.0}, {0.0, 1.0}, {1.0, 1.0}, {1.0, 0.0}, {0.0, 0.0}};
 
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     glGenVertexArrays(1, &vao[i]);
     glBindVertexArray(vao[i]);
 
@@ -24,6 +25,10 @@ void GeometryManager::init_geometry() {
       break;
     case 2:
       glBufferData(GL_ARRAY_BUFFER, sizeof(square_vertices), square_vertices, GL_STATIC_DRAW);
+      break;
+    case 3:
+      glBufferData(GL_ARRAY_BUFFER, sizeof(square_line_vertices), square_line_vertices,
+                   GL_STATIC_DRAW);
       break;
     }
 
@@ -44,6 +49,9 @@ void GeometryManager::draw_geo(GeometryType geo) const {
     break;
   case GeometryType::Square:
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    break;
+  case GeometryType::SquareLine:
+    glDrawArrays(GL_LINE_STRIP, 0, 5);
     break;
   }
 }
@@ -191,7 +199,20 @@ MediumType MediumType::Medium(float index_of_refraction) {
   return MediumType(false, index_of_refraction);
 }
 
-MediumType MediumType::Boundary() { return MediumType(true, 0); }
+MediumType MediumType::Boundary() { return MediumType(true, 1.0); }
+
+void MediumType::draw_imgui_controls() {
+  ImGui::Text("Medium Type:");
+  const char *type_options[2] = {"Boundary", "Medium"};
+
+  int type_index = is_boundary ? 0 : 1;
+  ImGui::Combo("Type", &type_index, type_options, IM_ARRAYSIZE(type_options));
+  is_boundary = type_index == 0;
+
+  if (!is_boundary) {
+    ImGui::SliderFloat("Refractive Index", &ior, 0.5, 4.0, "%.4f", ImGuiSliderFlags_Logarithmic);
+  }
+}
 
 void SimObject::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                               bool active) const {
@@ -202,6 +223,8 @@ bool SimObject::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_s
   // by default, don't use any events
   return false;
 }
+
+void SimObject::draw_imgui_controls() { ImGui::Text("Selected object has no properties."); }
 
 void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
@@ -230,7 +253,7 @@ void Environment::handle_events(glm::vec2 delta_x, glm::vec2 screen_size) {
   }
 
   // check events on each object, stopping if the events make an object active
-  for (size_t i = 0; i < objects.size(); i++) {
+  for (size_t i = objects.size(); i-- > 0;) {
     if (objects[i]->handle_events(delta_x, false, screen_size)) {
       active_object = i;
       break;
@@ -238,15 +261,27 @@ void Environment::handle_events(glm::vec2 delta_x, glm::vec2 screen_size) {
   }
 }
 
+void Environment::draw_imgui_controls() {
+  if (active_object >= 0 && active_object < objects.size()) {
+    objects[active_object]->draw_imgui_controls();
+  } else {
+    ImGui::Text("No object selected.");
+  }
+}
+
+// transform a square at (0, 0) with length 1 to a rectangle with corners (x0, y0), (x1, y1)
+static glm::mat4 transform_rect(float x0, float y0, float x1, float y1,
+                                glm::vec2 physical_scale_factor) {
+  return glm::scale(glm::translate(glm::mat4(1.0f),
+                                   glm::vec3(x0, y0, 0.0) * glm::vec3(physical_scale_factor, 1.0)),
+                    glm::vec3(x1 - x0, y1 - y0, 1.0) * glm::vec3(physical_scale_factor, 1.0));
+}
+
 void Rectangle::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   medium.set_gl_program(programs);
 
-  auto transform =
-      glm::scale(glm::translate(glm::mat4(1.0f),
-                                glm::vec3(x0, y0, 0.0) * glm::vec3(physical_scale_factor, 1.0)),
-                 glm::vec3(x1 - x0, y1 - y0, 1.0) * glm::vec3(physical_scale_factor, 1.0));
-
-  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE, glm::value_ptr(transform));
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(transform_rect(x0, y0, x1, y1, physical_scale_factor)));
   programs.geo.draw_geo(GeometryType::Square);
 }
 
@@ -272,11 +307,15 @@ void Rectangle::draw_controls(const Programs &programs, glm::vec2 physical_scale
   glPointSize(rectangle_handle_size);
   glUniform1i(programs.handle_hole_loc, 0);
   glUniform1i(programs.handle_selected_loc, active);
-
+  // draw handles at corners of rectangle
   draw_point(programs, x0, y0, physical_scale_factor);
   draw_point(programs, x0, y1, physical_scale_factor);
   draw_point(programs, x1, y0, physical_scale_factor);
   draw_point(programs, x1, y1, physical_scale_factor);
+  // draw outline of rectangle
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(transform_rect(x0, y0, x1, y1, physical_scale_factor)));
+  programs.geo.draw_geo(GeometryType::SquareLine);
 }
 
 // check if a mouse position is within the given pixel rectangle
@@ -297,8 +336,9 @@ static glm::vec2 physical_pos_to_pixel(float x, float y, glm::vec2 delta_x, glm:
 
 static glm::vec2 pixel_pos_to_physical(const ImVec2 &mouse_pos, glm::vec2 delta_x,
                                        glm::vec2 screen_size) {
-  return glm::vec2((mouse_pos.x - screen_size.x / 2.0) * delta_x.x,
-                   -(mouse_pos.y - screen_size.y / 2.0) * delta_x.y);
+  return glm::vec2(
+      (glm::clamp(mouse_pos.x, 0.f, (float)screen_size.x) - screen_size.x / 2.0) * delta_x.x,
+      -(glm::clamp(mouse_pos.y, 0.f, (float)screen_size.y) - screen_size.y / 2.0) * delta_x.y);
 }
 
 // handle events for a handle located at physical coordinates (x, y)
@@ -311,10 +351,8 @@ static bool handle_handle_events(glm::vec2 delta_x, bool active, float &x, float
   const auto &mouse_pos = ImGui::GetMousePos();
   // if mouse was clicked this frame
   const bool clicked = ImGui::IsMouseClicked(0);
-
-  const auto &drag_delta = ImGui::GetMouseDragDelta(0);
   // if mouse is being dragged this frame
-  const bool dragged = drag_delta.x != 0 || drag_delta.y != 0;
+  const bool dragged = ImGui::IsMouseDragging(0);
 
   bool mouse_in_handle = pixel_pos_in_handle(
       mouse_pos, physical_pos_to_pixel(x, y, delta_x, screen_size), handle_size);
@@ -341,11 +379,49 @@ static bool handle_handle_events(glm::vec2 delta_x, bool active, float &x, float
 }
 
 bool Rectangle::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
-  return handle_handle_events(delta_x, active, x0, y0, rectangle_handle_size, screen_size) ||
-         handle_handle_events(delta_x, active, x1, y0, rectangle_handle_size, screen_size) ||
-         handle_handle_events(delta_x, active, x0, y1, rectangle_handle_size, screen_size) ||
-         handle_handle_events(delta_x, active, x1, y1, rectangle_handle_size, screen_size);
+  float *corners[4][2] = {{&x0, &y0}, {&x1, &y0}, {&x0, &y1}, {&x1, &y1}};
+  // check if event effected handle
+  for (int i = 0; i < 4; i++) {
+    if (handle_handle_events(delta_x, active_handle == i, *corners[i][0], *corners[i][1],
+                             rectangle_handle_size, screen_size)) {
+      active_handle = i;
+      return true;
+    }
+  }
+
+  active_handle = -1;
+
+  // check if event effected body of rectangle
+  const bool mouse_clicked = ImGui::IsMouseClicked(0);
+
+  const auto &mouse_pos = ImGui::GetMousePos();
+  const bool mouse_in_body = pixel_pos_in_rect(
+      mouse_pos, physical_pos_to_pixel(glm::min(x0, x1), glm::max(y0, y1), delta_x, screen_size),
+      physical_pos_to_pixel(glm::max(x0, x1), glm::min(y0, y1), delta_x, screen_size));
+
+  // handle body select / deselect
+  if (mouse_clicked) {
+    active = mouse_in_body;
+  }
+
+  if (active && ImGui::IsMouseDragging(0)) {
+    // handle dragging of body
+    const auto &drag = ImGui::GetMouseDragDelta(0);
+    ImGui::ResetMouseDragDelta(0);
+
+    float dx = drag.x * delta_x.x;
+    float dy = -drag.y * delta_x.y;
+
+    x0 += dx;
+    x1 += dx;
+    y0 += dy;
+    y1 += dy;
+  }
+
+  return active;
 }
+
+void Rectangle::draw_imgui_controls() { medium.draw_imgui_controls(); }
 
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   glUseProgram(programs.object_program);

@@ -46,6 +46,9 @@ class WavesApp {
   // Wave speed in free space (in m/s)
   float wave_speed_vacuum{2.0};
 
+  // if editing controls should be shown
+  bool show_edit{true};
+
   // gl programs and geometry
   Programs programs{};
 

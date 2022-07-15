@@ -172,9 +172,12 @@ void WavesApp::draw_env_controls() {
 
   environment.draw_controls(programs, get_scale_factor());
 
-  environment.handle_events(glm::vec2(delta_x * (float)texture_width / (float)width,
-                                      delta_x * (float)texture_height / (float)height),
-                            glm::vec2(width, height));
+  // only handle mouse events if they aren't on imgui windows
+  if (!ImGui::GetIO().WantCaptureMouse) {
+    environment.handle_events(glm::vec2(delta_x * (float)texture_width / (float)width,
+                                        delta_x * (float)texture_height / (float)height),
+                              glm::vec2(width, height));
+  }
 }
 
 int WavesApp::draw_frame() {
@@ -192,11 +195,20 @@ int WavesApp::draw_frame() {
   // render state
   run_display();
   // handle environment controls
-  draw_env_controls();
+  if (show_edit) {
+    draw_env_controls();
+
+    ImGui::Begin("Edit Object");
+    environment.draw_imgui_controls();
+    ImGui::End();
+  }
 
   ImGui::Begin("Simulation Settings");
   ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
   ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+  if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
+    show_edit = !show_edit;
+  }
   ImGui::End();
 
   ImGui::ShowDemoWindow();
@@ -235,7 +247,11 @@ int main() {
 
   app.add_object(std::make_unique<AreaClear>());
   app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 3.0)));
-  app.add_object(std::make_unique<PointSource>(5.0, 0.0, std::make_unique<SineWaveform>(6.0, 2.7)));
+  app.add_object(std::make_unique<PointSource>(5.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
   app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)

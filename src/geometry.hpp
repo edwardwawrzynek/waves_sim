@@ -24,11 +24,13 @@ enum class GeometryType {
   Line = 1,
   // A VAO with a rectangle with corners (0, 0) and (1, 1)
   Square = 2,
+  // A VAO with lines through (0, 0), (0, 1), (1, 1), (1, 0), to (0, 0)
+  SquareLine = 3,
 };
 
 // GeometryManager contains the VAOs needed to draw the primitive shapes used in simulation.
 class GeometryManager {
-  GLuint vao[3]{0, 0, 0};
+  GLuint vao[4]{0, 0, 0, 0};
 
 public:
   // Create the VAOs with appropriate geometry. Requires the gl context to be up.
@@ -125,6 +127,9 @@ public:
   // Setup gl program, uniforms, and glColorMask to render this medium
   void set_gl_program(const Programs &programs) const;
 
+  // Draw imgui editing controls for this medium type
+  void draw_imgui_controls();
+
 private:
   MediumType(bool is_boundary, float index_of_refraction)
       : is_boundary(is_boundary), ior(index_of_refraction){};
@@ -143,6 +148,10 @@ public:
   // the object is selected or the event caused the object to be selected, return true. If the
   // object isn't selected, return false.
   virtual bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size);
+  // draw the imgui controls for this object. This is called within an imgui window (ie, within
+  // ImGui::Begin and ImGui::End)
+  virtual void draw_imgui_controls();
+
   virtual ~SimObject() = default;
 };
 
@@ -154,6 +163,7 @@ public:
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
   void handle_events(glm::vec2 delta_x, glm::vec2 screen_size);
+  void draw_imgui_controls();
 
   Environment() = default;
 };
@@ -173,10 +183,15 @@ public:
   float x0, y0, x1, y1;
   MediumType medium;
 
+  // which corner handle is active (or -1 if none)
+  int active_handle{-1};
+
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+
+  void draw_imgui_controls() override;
 
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
