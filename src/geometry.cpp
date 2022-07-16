@@ -1,4 +1,5 @@
 #include "geometry.hpp"
+#include <cmath>
 
 #define PI 3.141592653589793
 
@@ -210,7 +211,7 @@ void MediumType::draw_imgui_controls() {
   is_boundary = type_index == 0;
 
   if (!is_boundary) {
-    ImGui::SliderFloat("Refractive Index", &ior, 0.5, 4.0, "%.4f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Refractive Index", &ior, 1.0, 4.0);
   }
 }
 
@@ -442,17 +443,108 @@ void Waveform::set_gl_program(const Programs &programs, float time, float phase)
   glColorMask(GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE);
 }
 
+void Waveform::draw_imgui_controls(std::unique_ptr<Waveform> &waveform, const char *label) {
+  ImGui::Text("%s", label);
+  const char *waveform_type_names[3] = {"Sine", "Triangle", "Square"};
+  int waveform_type = waveform->waveform_type_index();
+  if (ImGui::Combo("Type", &waveform_type, waveform_type_names,
+                   IM_ARRAYSIZE(waveform_type_names))) {
+    const auto &prev_freq_amp = waveform->get_freq_amp();
+    switch (waveform_type) {
+    case 0:
+      waveform = std::make_unique<SineWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+      break;
+    case 1:
+      waveform = std::make_unique<TriangleWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+      break;
+    case 2:
+      waveform = std::make_unique<SquareWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+      break;
+    }
+  }
+
+  waveform->draw_imgui_prop_controls();
+}
+
+std::pair<float, float> Waveform::get_freq_amp() const { return {1.0, 1.0}; }
+
 float SineWaveform::sample(float time, float phase) const {
-  return amp * sin(2.0 * PI * freq * time + phase);
+  return amp * sin(2.0 * PI * (freq * time + phase));
 }
 
 float SineWaveform::sample_diff(float time, float phase) const {
-  return amp * 2.0 * PI * freq * cos(2.0 * PI * freq * time + phase);
+  return amp * 2.0 * PI * freq * cos(2.0 * PI * (freq * time + phase));
 }
+
+void SineWaveform::draw_imgui_prop_controls() {
+  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
+  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+}
+
+int SineWaveform::waveform_type_index() { return 0; }
+
+std::pair<float, float> SineWaveform::get_freq_amp() const { return {freq, amp}; }
+
+float TriangleWaveform::sample(float time, float phase) const {
+  time = std::fmod(freq * time + phase, 1.0);
+  if (time <= 0.25) {
+    return amp * (time * 4.0);
+  } else if (time <= 0.75) {
+    return amp * (1.0 - 4.0 * (time - 0.25));
+  } else {
+    return amp * (-1.0 + 4.0 * (time - 0.75));
+  }
+}
+
+float TriangleWaveform::sample_diff(float time, float phase) const {
+  time = std::fmod(freq * time + phase, 1.0);
+  if (time < 0.25 || time > 0.75) {
+    return 4.0 * freq;
+  } else if (time > 0.25 && time < 0.75) {
+    return 4.0 * freq;
+  } else {
+    // triangle wave isn't differentiable at peaks
+    // 0 is used because it keeps the peak stable if waveform stops driving u
+    return 0.0;
+  }
+}
+
+void TriangleWaveform::draw_imgui_prop_controls() {
+  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
+  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+}
+
+int TriangleWaveform::waveform_type_index() { return 1; }
+
+std::pair<float, float> TriangleWaveform::get_freq_amp() const { return {freq, amp}; }
+
+float SquareWaveform::sample(float time, float phase) const {
+  time = std::fmod(freq * time + phase, 1.0);
+  if (time < 0.5) {
+    return amp;
+  } else {
+    return -amp;
+  }
+}
+
+float SquareWaveform::sample_diff(float time, float phase) const {
+  // waveform isn't differentiable at 0, 0.5, 1, ...
+  // derivative is 0 everywhere else
+  return 0.0;
+}
+
+void SquareWaveform::draw_imgui_prop_controls() {
+  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
+  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+}
+
+int SquareWaveform::waveform_type_index() { return 2; }
+
+std::pair<float, float> SquareWaveform::get_freq_amp() const { return {freq, amp}; }
 
 void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
-  waveform->set_gl_program(programs, time, 0.0);
+  waveform->set_gl_program(programs, time, phase);
   glPointSize(1);
   draw_point(programs, x, y, physical_scale_factor);
 }
@@ -471,4 +563,9 @@ void PointSource::draw_controls(const Programs &programs, glm::vec2 physical_sca
 
 bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
   return handle_handle_events(delta_x, active, x, y, point_handle_size, screen_size);
+}
+
+void PointSource::draw_imgui_controls() {
+  Waveform::draw_imgui_controls(waveform);
+  ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
 }

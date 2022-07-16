@@ -202,16 +202,26 @@ public:
 class Waveform {
 public:
   // Waveforms are sampled over both time (s) and phase (rad). For a constant amplitude wave,
-  // these correspond to the same thing. for a wave with time dependent amplitude (such as a pulse
-  // envelope), phase should change the phase of the carrier but not of any envelope.
-  // For example, an implementation of an am signal might be:
-  // signal(time) * cos(carrier_freq * time + phase
+  // these correspond to the same thing. For a wave with time dependent envelope, phase should
+  // change the phase of the carrier but not of the envelope. For example, an implementation of an
+  // am signal might be: signal(time) * cos(carrier_freq * time + phase
   virtual float sample(float time, float phase) const = 0;
   // Return the time derivative (df/dt) of sample
   virtual float sample_diff(float time, float phase) const = 0;
 
   // Setup the gl program to draw this waveform on a source
   void set_gl_program(const Programs &programs, float time, float phase) const;
+
+  // Draw imgui controls for the waveform properties
+  virtual void draw_imgui_prop_controls() = 0;
+  // draw imgui controls for the waveform properties and type
+  static void draw_imgui_controls(std::unique_ptr<Waveform> &waveform,
+                                  const char *label = "Waveform:");
+
+  virtual int waveform_type_index() = 0;
+
+  // return the frequency and amplitude of the wave (if periodic), 1.0 otherwise
+  virtual std::pair<float, float> get_freq_amp() const;
 
   virtual ~Waveform() = default;
 };
@@ -225,7 +235,41 @@ public:
   float sample(float time, float phase) const override;
   float sample_diff(float time, float phase) const override;
 
+  void draw_imgui_prop_controls() override;
+  int waveform_type_index() override;
+  std::pair<float, float> get_freq_amp() const override;
+
   SineWaveform(float amplitude, float frequency) : amp(amplitude), freq(frequency){};
+};
+
+// A triangle wave
+class TriangleWaveform : public Waveform {
+public:
+  float amp, freq;
+
+  float sample(float time, float phase) const override;
+  float sample_diff(float time, float phase) const override;
+
+  void draw_imgui_prop_controls() override;
+  int waveform_type_index() override;
+  std::pair<float, float> get_freq_amp() const override;
+
+  TriangleWaveform(float amp, float freq) : amp(amp), freq(freq){};
+};
+
+// A square wave
+class SquareWaveform : public Waveform {
+public:
+  float amp, freq;
+
+  float sample(float time, float phase) const override;
+  float sample_diff(float time, float phase) const override;
+
+  void draw_imgui_prop_controls() override;
+  int waveform_type_index() override;
+  std::pair<float, float> get_freq_amp() const override;
+
+  SquareWaveform(float amp, float freq) : amp(amp), freq(freq){};
 };
 
 // A point wave source
@@ -234,11 +278,13 @@ public:
   // location
   float x, y;
   std::unique_ptr<Waveform> waveform;
+  float phase{0.0};
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+  void draw_imgui_controls() override;
 
   PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
       : x(x), y(y), waveform(std::move(waveform)){};

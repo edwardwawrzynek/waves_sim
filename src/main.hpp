@@ -16,7 +16,6 @@
 class WavesApp {
   // Window and gl context
   SDL_Window *window;
-  SDL_Surface *surface;
   SDL_GLContext gl_context;
 
   // Display window size

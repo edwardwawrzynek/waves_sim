@@ -43,7 +43,6 @@ int WavesApp::init_sdl_window() {
   gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1);
-  surface = SDL_GetWindowSurface(window);
 
   return 0;
 }
