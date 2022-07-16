@@ -245,12 +245,7 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
-  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 3.0)));
-  app.add_object(std::make_unique<PointSource>(5.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
-  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<PointSource>(-3.0, 0.0, std::make_unique<SineWaveform>(6.0, 0.7)));
   app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)

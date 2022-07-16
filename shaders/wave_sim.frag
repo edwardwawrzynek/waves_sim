@@ -47,6 +47,23 @@ float calc_wave_eq(ivec2 point, float u_point, float wave_speed) {
     return wave_speed * wave_speed * laplace;
 }
 
+// return damping factor for a point (in pixel coordinates)
+// damping is used near edges to try to absorb waves, rather than reflect them
+float damping_area_size = 0.15;
+float damping(vec2 point) {
+    // normalize point coordinates to be within [0, 1]
+    point = point / vec2(textureSize(sim_texture, 0));
+
+    // get distance from point to closest edge
+    float dist = min(min(point.x, point.y), min(1.0 - point.x, 1.0 - point.y));
+
+    if(dist < damping_area_size) {
+        return 0.1 * (dist / damping_area_size) + 0.9;
+    } else {
+        return 1.0;
+    }
+}
+
 void main() {
     vec4 point = texelFetch(sim_texture, ivec2(gl_FragCoord.xy), 0);
     float u = point.x;
@@ -56,6 +73,8 @@ void main() {
     float u_tt = calc_wave_eq(ivec2(gl_FragCoord.xy), u, ior_inv * wave_speed_vacuum);
 
     u_t += u_tt * delta_t;
+    u_t *= damping(gl_FragCoord.xy);
+
     u += u_t * delta_t;
 
     color = vec4(u, u_t, point.b, point.a);
