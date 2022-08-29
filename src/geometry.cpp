@@ -160,11 +160,12 @@ int Programs::init() {
   sim_sim_tex_loc = glGetUniformLocation(sim_program, "sim_texture");
   display_sim_tex_loc = glGetUniformLocation(display_program, "sim_texture");
   display_screen_size_loc = glGetUniformLocation(display_program, "screen_size");
+  display_damping_area_size_loc = glGetUniformLocation(display_program, "damping_area_size");
 
   sim_delta_x_loc = glGetUniformLocation(sim_program, "delta_x");
   sim_delta_t_loc = glGetUniformLocation(sim_program, "delta_t");
-  sim_time_loc = glGetUniformLocation(sim_program, "time");
   sim_wave_speed_vacuum_loc = glGetUniformLocation(sim_program, "wave_speed_vacuum");
+  sim_damping_area_size_loc = glGetUniformLocation(sim_program, "damping_area_size");
 
   sim_transform_loc = glGetUniformLocation(sim_program, "transform");
   display_transform_loc = glGetUniformLocation(display_program, "transform");
@@ -268,6 +269,10 @@ void Environment::draw_imgui_controls() {
   } else {
     ImGui::Text("No object selected.");
   }
+}
+
+bool Environment::has_active_object() const {
+  return active_object >= 0 && active_object < objects.size();
 }
 
 // transform a square at (0, 0) with length 1 to a rectangle with corners (x0, y0), (x1, y1)

@@ -13,7 +13,8 @@ uniform float delta_t;
 // Wave speed in free space (in m/s)
 uniform float wave_speed_vacuum;
 
-uniform float time;
+// Size of absorbing boundary layer (in texels)
+uniform float damping_area_size;
 
 // Get the value of the wave at a point. Point is the point to get, and u_neighbor is the value of the neighbor of point being considered. u_neighbor is returned if the point is a boundary.
 float get_value(ivec2 point, float u_neighbor) {
@@ -49,16 +50,15 @@ float calc_wave_eq(ivec2 point, float u_point, float wave_speed) {
 
 // return damping factor for a point (in pixel coordinates)
 // damping is used near edges to try to absorb waves, rather than reflect them
-float damping_area_size = 0.15;
 float damping(vec2 point) {
-    // normalize point coordinates to be within [0, 1]
-    point = point / vec2(textureSize(sim_texture, 0));
+    ivec2 tex_size = textureSize(sim_texture, 0);
 
     // get distance from point to closest edge
-    float dist = min(min(point.x, point.y), min(1.0 - point.x, 1.0 - point.y));
+    float dist = min(min(point.x, point.y), min(float(tex_size.x) - point.x, float(tex_size.y) - point.y));
 
     if(dist < damping_area_size) {
-        return 0.1 * (dist / damping_area_size) + 0.9;
+        float norm = dist / damping_area_size;
+        return tanh(2.0 * norm + 1.0);
     } else {
         return 1.0;
     }

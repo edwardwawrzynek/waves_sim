@@ -44,9 +44,13 @@ class WavesApp {
   float delta_x{0.04};
   // Wave speed in free space (in m/s)
   float wave_speed_vacuum{2.0};
+  // Size (in texels) of absorbing boundary layer
+  int damping_area_size{128};
 
   // if editing controls should be shown
   bool show_edit{true};
+  // if program simulation should be run (or is paused)
+  bool run_sim{true};
 
   // gl programs and geometry
   Programs programs{};
@@ -66,8 +70,11 @@ class WavesApp {
   // Handle window events, and return non zero if program should quit
   int handle_sdl_events();
 
-  // Get the factor by which physical coordinates are scaled to screen coordinates
+  // Get the factor by which physical coordinates are scaled to texture coordinates
   glm::vec2 get_scale_factor() const;
+  // Get the factor by which physical coordinates are scaled to display coordinates
+  // (same as texture coordinates, but excludes absorbing layer area)
+  glm::vec2 get_display_scale_factor() const;
 
   // Draw the environment onto the last written sim texture
   void draw_environment();

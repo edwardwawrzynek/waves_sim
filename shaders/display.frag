@@ -5,12 +5,21 @@ precision highp int;
 out vec4 color;
 
 uniform sampler2D sim_texture;
+// screen size of window on which we are displaying (in pixels)
 uniform vec2 screen_size;
+// size of absorbing boundary layer in sim_texture (in texels)
+uniform float damping_area_size;
 
 void main() {
+    vec2 damping_offset = vec2(damping_area_size, damping_area_size);
+    vec2 tex_size = vec2(textureSize(sim_texture, 0));
+    vec2 damping_relative_cover = damping_offset / tex_size;
+
     // get screen pos in [0, 1]
     vec2 screen_pos = gl_FragCoord.xy / screen_size;
-    vec4 point = texture(sim_texture, screen_pos.xy);
+    // get position in texture
+    vec2 sim_pos = screen_pos * (vec2(1.0, 1.0) - 2.0 * damping_relative_cover) + damping_relative_cover;
+    vec4 point = texture(sim_texture, sim_pos);
     // draw boundaries white
     if(point.a > 0.0) {
         color = vec4(1.0, 1.0, 1.0, 1.0);

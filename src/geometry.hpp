@@ -71,16 +71,16 @@ public:
 
   // uniform location for sim_texture in sim_program
   GLint sim_sim_tex_loc{};
-  // uniform location for sim_texture in display_program
+  // uniform locations in display_program
   GLint display_sim_tex_loc{};
-  // uniform location for screen_size in display_program
   GLint display_screen_size_loc{};
+  GLint display_damping_area_size_loc{};
 
   // uniform locations for sim_program physical parameters
   GLint sim_delta_x_loc{};
   GLint sim_delta_t_loc{};
-  GLint sim_time_loc{};
   GLint sim_wave_speed_vacuum_loc{};
+  GLint sim_damping_area_size_loc{};
 
   // transform matrix location
   GLint sim_transform_loc{};
@@ -164,6 +164,7 @@ public:
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
   void handle_events(glm::vec2 delta_x, glm::vec2 screen_size);
   void draw_imgui_controls();
+  bool has_active_object() const;
 
   Environment() = default;
 };

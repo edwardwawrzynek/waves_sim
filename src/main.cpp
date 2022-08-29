@@ -113,7 +113,12 @@ int WavesApp::handle_sdl_events() {
 }
 
 glm::vec2 WavesApp::get_scale_factor() const {
-  return glm::vec2(2.0 / ((float)texture_width * delta_x), 2.0 / ((float)texture_height * delta_x));
+  return glm::vec2(2.0 / ((float)(texture_width)*delta_x), 2.0 / ((float)(texture_height)*delta_x));
+}
+
+glm::vec2 WavesApp::get_display_scale_factor() const {
+  return glm::vec2(2.0 / ((texture_width - 2.0 * damping_area_size) * delta_x),
+                   2.0 / ((texture_height - 2.0 * damping_area_size) * delta_x));
 }
 
 // Draw the environment on the simulation texture
@@ -137,8 +142,8 @@ void WavesApp::run_simulation() {
 
   glUniform1f(programs.sim_delta_x_loc, delta_x);
   glUniform1f(programs.sim_delta_t_loc, delta_t);
-  glUniform1f(programs.sim_time_loc, time);
   glUniform1f(programs.sim_wave_speed_vacuum_loc, wave_speed_vacuum);
+  glUniform1f(programs.sim_damping_area_size_loc, (float)damping_area_size);
 
   glUniformMatrix4fv(programs.sim_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
@@ -158,6 +163,7 @@ void WavesApp::run_display() {
   glUseProgram(programs.display_program);
   glUniform1i(programs.display_sim_tex_loc, current_sim_texture ? 0 : 1);
   glUniform2f(programs.display_screen_size_loc, (GLfloat)width, (GLfloat)height);
+  glUniform1f(programs.display_damping_area_size_loc, (GLfloat)damping_area_size);
 
   glUniformMatrix4fv(programs.display_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
@@ -169,13 +175,14 @@ void WavesApp::draw_env_controls() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, width, height);
 
-  environment.draw_controls(programs, get_scale_factor());
+  environment.draw_controls(programs, get_display_scale_factor());
 
   // only handle mouse events if they aren't on imgui windows
   if (!ImGui::GetIO().WantCaptureMouse) {
-    environment.handle_events(glm::vec2(delta_x * (float)texture_width / (float)width,
-                                        delta_x * (float)texture_height / (float)height),
-                              glm::vec2(width, height));
+    environment.handle_events(
+        glm::vec2(delta_x * (texture_width - 2.0 * damping_area_size) / (float)width,
+                  delta_x * (texture_height - 2.0 * damping_area_size) / (float)height),
+        glm::vec2(width, height));
   }
 }
 
@@ -190,27 +197,38 @@ int WavesApp::draw_frame() {
 
   draw_environment();
   // run simulation step
-  run_simulation();
+  if (run_sim) {
+    run_simulation();
+  }
   // render state
   run_display();
   // handle environment controls
   if (show_edit) {
     draw_env_controls();
 
-    ImGui::Begin("Edit Object");
-    environment.draw_imgui_controls();
-    ImGui::End();
+    if (environment.has_active_object()) {
+      ImGui::Begin("Edit Object");
+      environment.draw_imgui_controls();
+      ImGui::End();
+    }
   }
 
   ImGui::Begin("Simulation Settings");
-  ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
-  ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+  if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
+    run_sim = !run_sim;
+  }
   if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
     show_edit = !show_edit;
   }
-  ImGui::End();
 
-  ImGui::ShowDemoWindow();
+  if (ImGui::CollapsingHeader("PDE Solver Settings")) {
+    ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
+    ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+    ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
+                     std::min(texture_width, texture_height) / 2 - 1);
+  }
+
+  ImGui::End();
 
   // render imgui
   ImGui::Render();
@@ -245,7 +263,8 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
-  app.add_object(std::make_unique<PointSource>(-3.0, 0.0, std::make_unique<SineWaveform>(6.0, 0.7)));
+  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
+  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
   app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
