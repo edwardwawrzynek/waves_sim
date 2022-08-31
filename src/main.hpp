@@ -51,6 +51,8 @@ class WavesApp {
   bool show_edit{true};
   // if program simulation should be run (or is paused)
   bool run_sim{true};
+  // number of simulation iterations to run each display cycle
+  int sim_cycles{1};
 
   // gl programs and geometry
   Programs programs{};
@@ -78,8 +80,12 @@ class WavesApp {
 
   // Draw the environment onto the last written sim texture
   void draw_environment();
+  // Clear current wave state
+  void clear_sim();
   // Run one step of the simulation program, rendering the new state onto the current texture
   void run_simulation();
+  // Get the size (in pixels) to display the simulation state at
+  glm::vec2 get_display_size();
   // Render the state of the last written sim texture
   void run_display();
   // Render simulation environment controls

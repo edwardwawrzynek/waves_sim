@@ -121,6 +121,15 @@ glm::vec2 WavesApp::get_display_scale_factor() const {
                    2.0 / ((texture_height - 2.0 * damping_area_size) * delta_x));
 }
 
+void WavesApp::clear_sim() {
+  glBindFramebuffer(GL_FRAMEBUFFER, sim_framebuffers[current_sim_texture ? 0 : 1]);
+  glViewport(0, 0, (GLsizei)texture_width, (GLsizei)texture_height);
+
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT);
+}
+
 // Draw the environment on the simulation texture
 void WavesApp::draw_environment() {
   // Bind the last written (ie next to be read) framebuffer
@@ -155,34 +164,46 @@ void WavesApp::run_simulation() {
   time += delta_t;
 }
 
+// Get size (in pixels) of area to draw
+glm::vec2 WavesApp::get_display_size() {
+  float display_size = std::min(width, height);
+  return {display_size, display_size};
+}
+
 // Draw simulation state to display
 void WavesApp::run_display() {
+  glm::vec2 display_size = get_display_size();
+
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, width, height);
+  glViewport(0, 0, (GLsizei)display_size.x, (GLsizei)display_size.y);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+  glClearColor(1.0, 1.0, 1.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(programs.display_program);
   glUniform1i(programs.display_sim_tex_loc, current_sim_texture ? 0 : 1);
-  glUniform2f(programs.display_screen_size_loc, (GLfloat)width, (GLfloat)height);
+  glUniform2f(programs.display_screen_size_loc, display_size.x, display_size.y);
   glUniform1f(programs.display_damping_area_size_loc, (GLfloat)damping_area_size);
 
   glUniformMatrix4fv(programs.display_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   programs.geo.draw_geo(GeometryType::Square);
 }
 
 void WavesApp::draw_env_controls() {
+  glm::vec2 display_size = get_display_size();
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, width, height);
+  glViewport(0, 0, (GLsizei)display_size.x, (GLsizei)display_size.y);
 
   environment.draw_controls(programs, get_display_scale_factor());
 
   // only handle mouse events if they aren't on imgui windows
   if (!ImGui::GetIO().WantCaptureMouse) {
     environment.handle_events(
-        glm::vec2(delta_x * (texture_width - 2.0 * damping_area_size) / (float)width,
-                  delta_x * (texture_height - 2.0 * damping_area_size) / (float)height),
-        glm::vec2(width, height));
+        glm::vec2(delta_x * (texture_width - 2.0 * damping_area_size) / display_size.x,
+                  delta_x * (texture_height - 2.0 * damping_area_size) / display_size.y),
+        display_size);
   }
 }
 
@@ -195,11 +216,39 @@ int WavesApp::draw_frame() {
   ImGui_ImplSDL2_NewFrame(window);
   ImGui::NewFrame();
 
-  draw_environment();
+  // Draw simulation controls
+  ImGui::Begin("Simulation Settings");
+  if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
+    run_sim = !run_sim;
+  }
+  if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
+    show_edit = !show_edit;
+  }
+  if (ImGui::Button("Reset Simulation State")) {
+    time = 0.0;
+    clear_sim();
+  }
+
+  if (ImGui::CollapsingHeader("PDE Solver Settings")) {
+    ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
+    ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+    ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
+                     std::min(texture_width, texture_height) / 2 - 1);
+    ImGui::SliderInt("Iterations per display cycle", &sim_cycles, 1, 100);
+  }
+
+  ImGui::End();
+
   // run simulation step
   if (run_sim) {
-    run_simulation();
+    for (int i = 0; i < sim_cycles; i++) {
+      draw_environment();
+      run_simulation();
+    }
+  } else {
+    draw_environment();
   }
+
   // render state
   run_display();
   // handle environment controls
@@ -212,23 +261,6 @@ int WavesApp::draw_frame() {
       ImGui::End();
     }
   }
-
-  ImGui::Begin("Simulation Settings");
-  if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
-    run_sim = !run_sim;
-  }
-  if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
-    show_edit = !show_edit;
-  }
-
-  if (ImGui::CollapsingHeader("PDE Solver Settings")) {
-    ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
-    ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
-    ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
-                     std::min(texture_width, texture_height) / 2 - 1);
-  }
-
-  ImGui::End();
 
   // render imgui
   ImGui::Render();
@@ -264,7 +296,10 @@ int main() {
 
   app.add_object(std::make_unique<AreaClear>());
   app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
-  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
+  // app.add_object(std::make_unique<PointSource>(0.0, 0.0,
+  // std::make_unique<SineWaveform>(6.0, 1.0)));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
   app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
 
 #if defined(__EMSCRIPTEN__)
