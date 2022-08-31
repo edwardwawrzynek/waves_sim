@@ -429,6 +429,62 @@ bool Rectangle::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_s
 
 void Rectangle::draw_imgui_controls() { medium.draw_imgui_controls(); }
 
+// get the transformation matrix for drawing a line from (x0, y) to (x1, y1)
+static glm::mat4 transform_line(float x0, float y0, float x1, float y1,
+                                glm::vec2 physical_scale_factor) {
+  // line geometry has points (0, 0) and (1, 0)
+  // we transform these to (x0, y0) and (x1, y1)
+  glm::vec2 p0 = glm::vec2(x0, y0) * physical_scale_factor;
+  glm::vec2 p1p0 = glm::vec2(x1 - x0, y1 - y0) * physical_scale_factor;
+  return glm::mat4(p1p0.x, p1p0.y, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, p0.x, p0.y,
+                   0.0, 1.0);
+}
+
+void Line::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
+  medium.set_gl_program(programs);
+  glLineWidth(1.0);
+  glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                     glm::value_ptr(transform_line(x0, y0, x1, y1, physical_scale_factor)));
+  programs.geo.draw_geo(GeometryType::Line);
+}
+
+void Line::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                         bool active) const {
+  glUseProgram(programs.handle_program);
+  glPointSize(rectangle_handle_size);
+  glUniform1i(programs.handle_hole_loc, 0);
+  glUniform1i(programs.handle_selected_loc, active);
+
+  // draw handles at points of line
+  draw_point(programs, x0, y0, physical_scale_factor);
+  draw_point(programs, x1, y1, physical_scale_factor);
+
+  // draw highlighted line
+  if (active) {
+    glLineWidth(2.0);
+    glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
+                       glm::value_ptr(transform_line(x0, y0, x1, y1, physical_scale_factor)));
+    programs.geo.draw_geo(GeometryType::Line);
+  }
+}
+
+bool Line::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+  float *corners[2][2] = {{&x0, &y0}, {&x1, &y1}};
+  // check if event effected handle
+  for (int i = 0; i < 2; i++) {
+    if (handle_handle_events(delta_x, active_handle == i, *corners[i][0], *corners[i][1],
+                             rectangle_handle_size, screen_size)) {
+      active_handle = i;
+      return true;
+    }
+  }
+
+  active_handle = -1;
+  return false;
+}
+
+void Line::draw_imgui_controls() { medium.draw_imgui_controls(); }
+
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   glUseProgram(programs.object_program);
   glUniform4f(programs.object_object_props_loc, 0.0, 0.0, 1.0, 0.0);

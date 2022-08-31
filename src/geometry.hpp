@@ -199,6 +199,25 @@ public:
       : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
 };
 
+// A line segment between two points
+class Line : public SimObject {
+public:
+  float x0, y0, x1, y1;
+
+  MediumType medium;
+  // which corner handle is active
+  int active_handle{-1};
+
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                     bool active) const override;
+  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+  void draw_imgui_controls() override;
+
+  Line(float x0, float y0, float x1, float y1, MediumType medium)
+      : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
+};
+
 // A waveform describes the intensity of a source over time.
 class Waveform {
 public:
