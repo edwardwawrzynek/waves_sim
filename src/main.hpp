@@ -19,7 +19,7 @@ class WavesApp {
   SDL_GLContext gl_context;
 
   // Display window size
-  GLsizei width{800}, height{800};
+  GLsizei width{1200}, height{800};
 
   // Simulation state storage texture. This is an rgba floating point texture.
   // The red channel is position (u), green is velocity (du/dt), blue is wave speed (c), alpha is

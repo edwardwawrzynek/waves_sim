@@ -199,23 +199,32 @@ public:
       : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
 };
 
-// A line segment between two points
-class Line : public SimObject {
+// A line segment (either medium or source) between two points
+class LineBase : public SimObject {
 public:
   float x0, y0, x1, y1;
-
-  MediumType medium;
   // which corner handle is active
   int active_handle{-1};
+
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor, bool active,
+                     bool draw_holes) const;
+  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+
+  LineBase(float x0, float y0, float x1, float y1) : x0(x0), y0(y0), x1(x1), y1(y1){};
+};
+
+// A line segment between two points
+class Line : public LineBase {
+public:
+  MediumType medium;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
-  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
   void draw_imgui_controls() override;
 
   Line(float x0, float y0, float x1, float y1, MediumType medium)
-      : x0(x0), y0(y0), x1(x1), y1(y1), medium(medium){};
+      : LineBase(x0, y0, x1, y1), medium(medium){};
 };
 
 // A waveform describes the intensity of a source over time.
@@ -308,6 +317,21 @@ public:
 
   PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
       : x(x), y(y), waveform(std::move(waveform)){};
+};
+
+// A line wave source (which leads to a plane wave)
+class LineSource : public LineBase {
+public:
+  std::unique_ptr<Waveform> waveform;
+  float phase{0.0};
+
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                     bool active) const override;
+  void draw_imgui_controls() override;
+
+  LineSource(float x0, float y0, float x1, float y1, std::unique_ptr<Waveform> waveform)
+      : LineBase(x0, y0, x1, y1), waveform(std::move(waveform)){};
 };
 
 #endif

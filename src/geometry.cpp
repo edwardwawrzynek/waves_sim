@@ -440,35 +440,30 @@ static glm::mat4 transform_line(float x0, float y0, float x1, float y1,
                    0.0, 1.0);
 }
 
-void Line::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
-  medium.set_gl_program(programs);
-  glLineWidth(1.0);
+static void draw_line(const Programs &programs, float x0, float y0, float x1, float y1,
+                      glm::vec2 physical_scale_factor) {
   glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(transform_line(x0, y0, x1, y1, physical_scale_factor)));
   programs.geo.draw_geo(GeometryType::Line);
 }
 
-void Line::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
-                         bool active) const {
+void LineBase::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor, bool active,
+                             bool draw_holes) const {
   glUseProgram(programs.handle_program);
   glPointSize(rectangle_handle_size);
-  glUniform1i(programs.handle_hole_loc, 0);
+  glUniform1i(programs.handle_hole_loc, draw_holes);
   glUniform1i(programs.handle_selected_loc, active);
 
   // draw handles at points of line
   draw_point(programs, x0, y0, physical_scale_factor);
   draw_point(programs, x1, y1, physical_scale_factor);
 
-  // draw highlighted line
-  if (active) {
-    glLineWidth(2.0);
-    glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
-                       glm::value_ptr(transform_line(x0, y0, x1, y1, physical_scale_factor)));
-    programs.geo.draw_geo(GeometryType::Line);
-  }
+  // draw line
+  glLineWidth(2.0);
+  draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
 }
 
-bool Line::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+bool LineBase::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
   float *corners[2][2] = {{&x0, &y0}, {&x1, &y1}};
   // check if event effected handle
   for (int i = 0; i < 2; i++) {
@@ -481,6 +476,17 @@ bool Line::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) 
 
   active_handle = -1;
   return false;
+}
+
+void Line::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
+  medium.set_gl_program(programs);
+  glLineWidth(1.0);
+  draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
+}
+
+void Line::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                         bool active) const {
+  LineBase::draw_controls(programs, physical_scale_factor, active, false);
 }
 
 void Line::draw_imgui_controls() { medium.draw_imgui_controls(); }
@@ -627,6 +633,22 @@ bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen
 }
 
 void PointSource::draw_imgui_controls() {
+  Waveform::draw_imgui_controls(waveform);
+  ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+}
+
+void LineSource::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
+  waveform->set_gl_program(programs, time, phase);
+  glLineWidth(1);
+  draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
+}
+
+void LineSource::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                               bool active) const {
+  LineBase::draw_controls(programs, physical_scale_factor, active, true);
+}
+
+void LineSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
 }
