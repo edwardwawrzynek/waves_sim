@@ -4,6 +4,7 @@
 #include <imgui_impl_sdl.h>
 
 #include <cstdio>
+#include <fstream>
 
 // opengl version
 #if defined(__EMSCRIPTEN__)
@@ -178,7 +179,7 @@ void WavesApp::run_display() {
   glViewport(0, 0, (GLsizei)display_size.x, (GLsizei)display_size.y);
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-  glClearColor(1.0, 1.0, 1.0, 0.0);
+  glClearColor(0.2, 0.2, 0.2, 0.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(programs.display_program);
@@ -207,6 +208,85 @@ void WavesApp::draw_env_controls() {
   }
 }
 
+void WavesApp::draw_error_popups() {
+  if (ImGui::BeginPopupModal("Cannot Read File")) {
+    ImGui::Text("Cannot read the selected file.");
+    ImGui::Separator();
+    if (ImGui::Button("Ok")) {
+      ImGui::CloseCurrentPopup();
+    }
+  }
+
+  if (ImGui::BeginPopupModal("Invalid Environment File")) {
+    ImGui::Text("The selected file is not a valid environment description.");
+    ImGui::Separator();
+    if (ImGui::Button("Ok")) {
+      ImGui::CloseCurrentPopup();
+    }
+  }
+}
+
+void WavesApp::load_from_file(const std::string &path) {
+  std::fstream file{path, std::ios_base::in};
+  if (!file.is_open()) {
+    fprintf(stderr, "Cannot open file: %s\n", path.c_str());
+    ImGui::OpenPopup("Cannot Read File");
+    return;
+  }
+
+  auto new_env = Environment::deserialize(file);
+  if (!new_env) {
+    fprintf(stderr, "Environment file is invalid\n");
+    ImGui::OpenPopup("Invalid Environment File");
+    return;
+  }
+
+  environment = std::move(*new_env);
+}
+
+void WavesApp::draw_add_menu() {
+  bool added = false;
+
+  if (ImGui::MenuItem("Point Source")) {
+    add_object(std::make_unique<PointSource>(0, 0, std::make_unique<SineWaveform>(1.0, 1.0), 0.0));
+    added = true;
+  }
+  if (ImGui::MenuItem("Line Source")) {
+    add_object(std::make_unique<LineSource>(-5, -5, 5, 5, 1.0,
+                                            std::make_unique<SineWaveform>(1.0, 1.0), 0.0));
+    added = true;
+  }
+  if (ImGui::MenuItem("Box")) {
+    add_object(std::make_unique<Rectangle>(-3, -3, 3, 3, MediumType::Boundary()));
+    added = true;
+  }
+  if (ImGui::MenuItem("Wall")) {
+    add_object(std::make_unique<Line>(-5, 5, 5, -5, 1, MediumType::Boundary()));
+    added = true;
+  }
+
+  if (added) {
+    environment.active_object = (int)environment.objects.size() - 1;
+  }
+}
+
+void WavesApp::draw_menu_bar() {
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Add")) {
+      draw_add_menu();
+      ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem("Settings")) {
+      show_settings = true;
+    }
+
+    ImGui::EndMainMenuBar();
+  }
+}
+
 int WavesApp::draw_frame() {
   if (handle_sdl_events()) {
     return 1;
@@ -217,27 +297,29 @@ int WavesApp::draw_frame() {
   ImGui::NewFrame();
 
   // Draw simulation controls
-  ImGui::Begin("Simulation Settings");
-  if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
-    run_sim = !run_sim;
-  }
-  if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
-    show_edit = !show_edit;
-  }
-  if (ImGui::Button("Reset Simulation State")) {
-    time = 0.0;
-    clear_sim();
-  }
+  if (show_settings) {
+    if (ImGui::Begin("Simulation Settings", &show_settings)) {
+      if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
+        run_sim = !run_sim;
+      }
+      if (ImGui::Button(show_edit ? "Hide Controls" : "Show Controls")) {
+        show_edit = !show_edit;
+      }
+      if (ImGui::Button("Reset Simulation State")) {
+        time = 0.0;
+        clear_sim();
+      }
 
-  if (ImGui::CollapsingHeader("PDE Solver Settings")) {
-    ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
-    ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
-    ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
-                     std::min(texture_width, texture_height) / 2 - 1);
-    ImGui::SliderInt("Iterations per display cycle", &sim_cycles, 1, 100);
+      if (ImGui::CollapsingHeader("PDE Solver Settings")) {
+        ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
+        ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+        ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
+                         std::min(texture_width, texture_height) / 2 - 1);
+        ImGui::SliderInt("Iterations per display cycle", &sim_cycles, 1, 100);
+      }
+    }
+    ImGui::End();
   }
-
-  ImGui::End();
 
   // run simulation step
   if (run_sim) {
@@ -256,11 +338,15 @@ int WavesApp::draw_frame() {
     draw_env_controls();
 
     if (environment.has_active_object()) {
-      ImGui::Begin("Edit Object");
-      environment.draw_imgui_controls();
+      if (ImGui::Begin("Edit Object")) {
+        environment.draw_imgui_controls();
+      }
       ImGui::End();
     }
   }
+
+  draw_error_popups();
+  draw_menu_bar();
 
   // render imgui
   ImGui::Render();
@@ -295,14 +381,6 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
-  app.add_object(std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(6.0, 1.0)));
-  // app.add_object(std::make_unique<PointSource>(0.0, 0.0,
-  // std::make_unique<SineWaveform>(6.0, 1.0)));
-  app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Line>(0.5, 1.0, 5.0, 8.0, 1.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Line>(2.0, 2.0, 3.0, 3.0, 1.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<LineSource>(-1.0, -1.0, -4.0, -4.0, 1.0,
-                                              std::make_unique<SineWaveform>(6.0, 1.0)));
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);

@@ -53,6 +53,8 @@ class WavesApp {
   bool run_sim{true};
   // number of simulation iterations to run each display cycle
   int sim_cycles{1};
+  // if simulation settings should be shown
+  bool show_settings{true};
 
   // gl programs and geometry
   Programs programs{};
@@ -90,6 +92,11 @@ class WavesApp {
   void run_display();
   // Render simulation environment controls
   void draw_env_controls();
+  // Draw error popup modals (if needed)
+  void draw_error_popups();
+  // Draw and handle main menu options
+  void draw_menu_bar();
+  void draw_add_menu();
 
 public:
   WavesApp() = default;
@@ -103,7 +110,11 @@ public:
   // Destroy imgui, sdl, and gl context
   void shutdown();
 
+  // Add an object to the environment
   void add_object(std::unique_ptr<SimObject> object);
+
+  // Load the environment from a file
+  void load_from_file(const std::string &path);
 };
 
 #endif

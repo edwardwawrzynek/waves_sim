@@ -3,7 +3,10 @@
 
 #include <SDL.h>
 #include <imgui.h>
+#include <iostream>
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 #if defined(__EMSCRIPTEN__)
 #include <GLES3/gl3.h>
@@ -129,6 +132,10 @@ public:
 
   // Draw imgui editing controls for this medium type
   void draw_imgui_controls();
+  // convert the medium type to a text representation
+  std::string serialize() const;
+  // convert a text representation of the type into a MediumType
+  static std::optional<MediumType> deserialize(std::istream &in);
 
 private:
   MediumType(bool is_boundary, float index_of_refraction)
@@ -149,8 +156,12 @@ public:
   // object isn't selected, return false.
   virtual bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size);
   // draw the imgui controls for this object. This is called within an imgui window (ie, within
-  // ImGui::Begin and ImGui::End)
-  virtual void draw_imgui_controls();
+  // ImGui::Begin and ImGui::End). Return true if this object should be deleted.
+  virtual bool draw_imgui_controls();
+  // convert the object to its textual representation
+  virtual std::string serialize() const = 0;
+  // get the object from its textual representation
+  static std::optional<std::unique_ptr<SimObject>> deserialize(std::istream &in);
 
   virtual ~SimObject() = default;
 };
@@ -158,13 +169,17 @@ public:
 class Environment {
 public:
   std::vector<std::unique_ptr<SimObject>> objects{};
-  int active_object{-1};
+  long int active_object{-1};
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const;
   void handle_events(glm::vec2 delta_x, glm::vec2 screen_size);
   void draw_imgui_controls();
   bool has_active_object() const;
+  // generate a textual representation of the environment
+  std::string serialize() const;
+  // convert a textual representation to an Environment
+  static std::optional<Environment> deserialize(std::istream &in);
 
   Environment() = default;
 };
@@ -173,6 +188,7 @@ public:
 class AreaClear : public SimObject {
 public:
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  std::string serialize() const override;
 
   AreaClear() = default;
 };
@@ -192,7 +208,8 @@ public:
                      bool active) const override;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
 
-  void draw_imgui_controls() override;
+  bool draw_imgui_controls() override;
+  std::string serialize() const override;
 
   // (x0, y0) define the bottom left corner, (x1, y1) defines the top right corner
   Rectangle(float x0, float y0, float x1, float y1, MediumType medium)
@@ -211,6 +228,7 @@ public:
                      bool draw_holes) const;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
   void imgui_line_controls();
+  std::string serialize_coordinates() const;
 
   LineBase(float x0, float y0, float x1, float y1, float width)
       : x0(x0), y0(y0), x1(x1), y1(y1), width(width){};
@@ -224,7 +242,8 @@ public:
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
-  void draw_imgui_controls() override;
+  bool draw_imgui_controls() override;
+  std::string serialize() const override;
 
   Line(float x0, float y0, float x1, float y1, float width, MediumType medium)
       : LineBase(x0, y0, x1, y1, width), medium(medium){};
@@ -255,6 +274,11 @@ public:
   // return the frequency and amplitude of the wave (if periodic), 1.0 otherwise
   virtual std::pair<float, float> get_freq_amp() const;
 
+  // convert the waveform to its stored textual representation
+  virtual std::string serialize() const = 0;
+  // convert a textual representation to a Waveform
+  static std::optional<std::unique_ptr<Waveform>> deserialze(std::istream &in);
+
   virtual ~Waveform() = default;
 };
 
@@ -270,6 +294,7 @@ public:
   void draw_imgui_prop_controls() override;
   int waveform_type_index() override;
   std::pair<float, float> get_freq_amp() const override;
+  std::string serialize() const override;
 
   SineWaveform(float amplitude, float frequency) : amp(amplitude), freq(frequency){};
 };
@@ -285,6 +310,7 @@ public:
   void draw_imgui_prop_controls() override;
   int waveform_type_index() override;
   std::pair<float, float> get_freq_amp() const override;
+  std::string serialize() const override;
 
   TriangleWaveform(float amp, float freq) : amp(amp), freq(freq){};
 };
@@ -300,6 +326,7 @@ public:
   void draw_imgui_prop_controls() override;
   int waveform_type_index() override;
   std::pair<float, float> get_freq_amp() const override;
+  std::string serialize() const override;
 
   SquareWaveform(float amp, float freq) : amp(amp), freq(freq){};
 };
@@ -310,32 +337,34 @@ public:
   // location
   float x, y;
   std::unique_ptr<Waveform> waveform;
-  float phase{0.0};
+  float phase;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
-  void draw_imgui_controls() override;
+  bool draw_imgui_controls() override;
+  std::string serialize() const override;
 
-  PointSource(float x, float y, std::unique_ptr<Waveform> waveform)
-      : x(x), y(y), waveform(std::move(waveform)){};
+  PointSource(float x, float y, std::unique_ptr<Waveform> waveform, float phase)
+      : x(x), y(y), waveform(std::move(waveform)), phase(phase){};
 };
 
 // A line wave source (which leads to a plane wave)
 class LineSource : public LineBase {
 public:
   std::unique_ptr<Waveform> waveform;
-  float phase{0.0};
+  float phase;
 
   void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                      bool active) const override;
-  void draw_imgui_controls() override;
+  bool draw_imgui_controls() override;
+  std::string serialize() const override;
 
   LineSource(float x0, float y0, float x1, float y1, float width,
-             std::unique_ptr<Waveform> waveform)
-      : LineBase(x0, y0, x1, y1, width), waveform(std::move(waveform)){};
+             std::unique_ptr<Waveform> waveform, float phase)
+      : LineBase(x0, y0, x1, y1, width), waveform(std::move(waveform)), phase(phase){};
 };
 
 #endif

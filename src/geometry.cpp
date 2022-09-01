@@ -216,6 +216,59 @@ void MediumType::draw_imgui_controls() {
   }
 }
 
+std::string MediumType::serialize() const {
+  if (is_boundary) {
+    return "(Boundary)";
+  } else {
+    return "(Medium " + std::to_string(ior) + ")";
+  }
+}
+
+// read a token from an istream until a space or ) appears
+static std::string read_token(std::istream &in) {
+  std::string token = "";
+  char c;
+  // read any whitespace
+  do {
+    c = in.get();
+    if (in.eof() || in.bad()) {
+      return "";
+    }
+  } while (c == ' ' || c == '(' || c == '\n' || c == '\t');
+
+  while (true) {
+    c = in.get();
+    if (in.eof() || in.bad()) {
+      return token;
+    }
+
+    if (c == ' ' || c == ')' || c == '\n' || c == '\t') {
+      in.putback(c);
+      return token;
+    }
+    token += c;
+  }
+}
+
+std::optional<MediumType> MediumType::deserialize(std::istream &in) {
+  auto type = read_token(in);
+  if (type == "Boundary") {
+    if (in.get() != ')')
+      return {};
+
+    return MediumType::Boundary();
+  } else if (type == "Medium") {
+    auto ior_s = read_token(in);
+    if (in.get() != ')')
+      return {};
+
+    return MediumType::Medium(std::stof(ior_s));
+  } else {
+    // unknown medium type
+    return {};
+  }
+}
+
 void SimObject::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
                               bool active) const {
   // by default, don't draw any controls
@@ -226,7 +279,71 @@ bool SimObject::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_s
   return false;
 }
 
-void SimObject::draw_imgui_controls() { ImGui::Text("Selected object has no properties."); }
+bool SimObject::draw_imgui_controls() {
+  ImGui::Text("Selected object has no properties.");
+  ImGui::Separator();
+  return ImGui::Button("Delete Object");
+}
+
+static std::tuple<float, float> read_coord(std::istream &in) {
+  float x = std::stof(read_token(in));
+  float y = std::stof(read_token(in));
+
+  return {x, y};
+}
+
+static std::tuple<float, float, float, float> read_coord_pair(std::istream &in) {
+  auto [x0, y0] = read_coord(in);
+  auto [x1, y1] = read_coord(in);
+
+  return {x0, y0, x1, y1};
+}
+
+std::optional<std::unique_ptr<SimObject>> SimObject::deserialize(std::istream &in) {
+  auto object = read_token(in);
+  if (object == "AreaClear") {
+    if (in.get() != ')')
+      return {};
+    return std::make_unique<AreaClear>();
+  } else if (object == "Rectangle") {
+    auto [x0, y0, x1, y1] = read_coord_pair(in);
+
+    auto medium = MediumType::deserialize(in);
+    if (!medium || in.get() != ')')
+      return {};
+
+    return std::make_unique<Rectangle>(x0, y0, x1, y1, *medium);
+  } else if (object == "Line") {
+    auto [x0, y0, x1, y1] = read_coord_pair(in);
+    auto width = std::stof(read_token(in));
+
+    auto medium = MediumType::deserialize(in);
+    if (!medium || in.get() != ')')
+      return {};
+
+    return std::make_unique<Line>(x0, y0, x1, y1, width, *medium);
+  } else if (object == "PointSource") {
+    auto [x, y] = read_coord(in);
+    auto waveform = Waveform::deserialze(in);
+    auto phase = std::stof(read_token(in));
+    if (!waveform || in.get() != ')')
+      return {};
+
+    return std::make_unique<PointSource>(x, y, std::move(waveform.value()), phase);
+  } else if (object == "LineSource") {
+    auto [x0, y0, x1, y1] = read_coord_pair(in);
+    auto width = std::stof(read_token(in));
+    auto waveform = Waveform::deserialze(in);
+    auto phase = std::stof(read_token(in));
+    if (!waveform || in.get() != ')')
+      return {};
+
+    return std::make_unique<LineSource>(x0, y0, x1, y1, width, std::move(waveform.value()), phase);
+  } else {
+    // unrecognized object
+    return {};
+  }
+}
 
 void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
@@ -237,13 +354,13 @@ void Environment::draw(const Programs &programs, glm::vec2 physical_scale_factor
 
 void Environment::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor) const {
   for (size_t i = 0; i < objects.size(); i++) {
-    objects[i]->draw_controls(programs, physical_scale_factor, i == active_object);
+    objects[i]->draw_controls(programs, physical_scale_factor, (long int)i == active_object);
   }
 }
 
 void Environment::handle_events(glm::vec2 delta_x, glm::vec2 screen_size) {
   // allow active object to capture events first
-  if (active_object >= 0 && active_object < objects.size()) {
+  if (active_object >= 0 && active_object < (long int)objects.size()) {
     // check if the events cause deactivation
     if (!objects[active_object]->handle_events(delta_x, true, screen_size)) {
       active_object = -1;
@@ -264,15 +381,52 @@ void Environment::handle_events(glm::vec2 delta_x, glm::vec2 screen_size) {
 }
 
 void Environment::draw_imgui_controls() {
-  if (active_object >= 0 && active_object < objects.size()) {
-    objects[active_object]->draw_imgui_controls();
+  if (active_object >= 0 && active_object < (long int)objects.size()) {
+    if (objects[active_object]->draw_imgui_controls()) {
+      objects.erase(objects.begin() + active_object);
+      active_object = -1;
+    }
   } else {
     ImGui::Text("No object selected.");
   }
 }
 
 bool Environment::has_active_object() const {
-  return active_object >= 0 && active_object < objects.size();
+  return active_object >= 0 && active_object < (long int)objects.size();
+}
+
+std::string Environment::serialize() const {
+  std::string res = "";
+  for (const auto &obj : objects) {
+    res += obj->serialize() + "\n";
+  }
+  return res;
+}
+
+std::optional<Environment> Environment::deserialize(std::istream &in) {
+  Environment res;
+
+  while (true) {
+    // handle eof or whitespace
+    while (true) {
+      char c = in.get();
+      // return if we reached end of file
+      if (in.eof() || in.bad()) {
+        return res;
+      }
+      // stop at anything that is not whitespace
+      else if (c != ' ' && c != '\n' && c != '\t') {
+        in.putback(c);
+        break;
+      }
+    }
+    // try to read object
+    auto obj = SimObject::deserialize(in);
+    if (!obj)
+      return {};
+
+    res.objects.push_back(std::move(obj.value()));
+  }
 }
 
 // transform a square at (0, 0) with length 1 to a rectangle with corners (x0, y0), (x1, y1)
@@ -434,11 +588,19 @@ static void imgui_point_input(const char *label, float &x, float &y) {
   y = p0[1];
 }
 
-void Rectangle::draw_imgui_controls() {
+bool Rectangle::draw_imgui_controls() {
   medium.draw_imgui_controls();
 
   imgui_point_input("Corner 0 (m)", x0, y0);
   imgui_point_input("Corner 1 (m)", x1, y1);
+
+  ImGui::Separator();
+  return ImGui::Button("Delete Object");
+}
+
+std::string Rectangle::serialize() const {
+  return "(Rectangle " + std::to_string(x0) + " " + std::to_string(y0) + " " + std::to_string(x1) +
+         " " + std::to_string(y1) + " " + medium.serialize() + ")";
 }
 
 // get the transformation matrix for drawing a line from (x0, y) to (x1, y1)
@@ -487,13 +649,18 @@ bool LineBase::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_si
   }
 
   active_handle = -1;
-  return false;
+  return active && !ImGui::IsMouseClicked(0);
 }
 
 void LineBase::imgui_line_controls() {
   imgui_point_input("Point 0 (m)", x0, y0);
   imgui_point_input("Point 1 (m)", x1, y1);
   ImGui::SliderFloat("Width (px)", &width, 1, 5);
+}
+
+std::string LineBase::serialize_coordinates() const {
+  return std::to_string(x0) + " " + std::to_string(y0) + " " + std::to_string(x1) + " " +
+         std::to_string(y1) + " " + std::to_string(width);
 }
 
 void Line::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
@@ -507,9 +674,15 @@ void Line::draw_controls(const Programs &programs, glm::vec2 physical_scale_fact
   LineBase::draw_controls(programs, physical_scale_factor, active, false);
 }
 
-void Line::draw_imgui_controls() {
+bool Line::draw_imgui_controls() {
   medium.draw_imgui_controls();
   imgui_line_controls();
+  ImGui::Separator();
+  return ImGui::Button("Delete Object");
+}
+
+std::string Line::serialize() const {
+  return "(Line " + serialize_coordinates() + " " + medium.serialize() + ")";
 }
 
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
@@ -522,6 +695,8 @@ void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, 
                      glm::value_ptr(GeometryManager::square_screen_cover_transform));
   programs.geo.draw_geo(GeometryType::Square);
 }
+
+std::string AreaClear::serialize() const { return "(AreaClear)"; }
 
 void Waveform::set_gl_program(const Programs &programs, float time, float phase) const {
   glUseProgram(programs.object_program);
@@ -556,6 +731,30 @@ void Waveform::draw_imgui_controls(std::unique_ptr<Waveform> &waveform, const ch
 
 std::pair<float, float> Waveform::get_freq_amp() const { return {1.0, 1.0}; }
 
+std::optional<std::unique_ptr<Waveform>> Waveform::deserialze(std::istream &in) {
+  auto type = read_token(in);
+  auto amp_s = read_token(in);
+  auto freq_s = read_token(in);
+
+  float amp = std::stof(amp_s);
+  float freq = std::stof(freq_s);
+
+  if (in.get() != ')') {
+    return {};
+  }
+
+  if (type == "Sine") {
+    return std::make_unique<SineWaveform>(amp, freq);
+  } else if (type == "Square") {
+    return std::make_unique<SquareWaveform>(amp, freq);
+  } else if (type == "Triangle") {
+    return std::make_unique<TriangleWaveform>(amp, freq);
+  } else {
+    // unrecognized waveform type
+    return {};
+  }
+}
+
 float SineWaveform::sample(float time, float phase) const {
   return amp * sin(2.0 * PI * (freq * time + phase));
 }
@@ -572,6 +771,10 @@ void SineWaveform::draw_imgui_prop_controls() {
 int SineWaveform::waveform_type_index() { return 0; }
 
 std::pair<float, float> SineWaveform::get_freq_amp() const { return {freq, amp}; }
+
+std::string SineWaveform::serialize() const {
+  return "(Sine " + std::to_string(amp) + " " + std::to_string(freq) + ")";
+}
 
 float TriangleWaveform::sample(float time, float phase) const {
   time = std::fmod(freq * time + phase, 1.0);
@@ -606,6 +809,10 @@ int TriangleWaveform::waveform_type_index() { return 1; }
 
 std::pair<float, float> TriangleWaveform::get_freq_amp() const { return {freq, amp}; }
 
+std::string TriangleWaveform::serialize() const {
+  return "(Triangle " + std::to_string(amp) + " " + std::to_string(freq) + ")";
+}
+
 float SquareWaveform::sample(float time, float phase) const {
   time = std::fmod(freq * time + phase, 1.0);
   if (time < 0.5) {
@@ -630,6 +837,10 @@ int SquareWaveform::waveform_type_index() { return 2; }
 
 std::pair<float, float> SquareWaveform::get_freq_amp() const { return {freq, amp}; }
 
+std::string SquareWaveform::serialize() const {
+  return "(Square " + std::to_string(amp) + " " + std::to_string(freq) + ")";
+}
+
 void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
   waveform->set_gl_program(programs, time, phase);
@@ -653,10 +864,17 @@ bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen
   return handle_handle_events(delta_x, active, x, y, point_handle_size, screen_size);
 }
 
-void PointSource::draw_imgui_controls() {
+bool PointSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
   imgui_point_input("Position (m)", x, y);
+  ImGui::Separator();
+  return ImGui::Button("Delete Object");
+}
+
+std::string PointSource::serialize() const {
+  return "(PointSource " + std::to_string(x) + " " + std::to_string(y) + " " +
+         waveform->serialize() + " " + std::to_string(phase) + ")";
 }
 
 void LineSource::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
@@ -670,8 +888,15 @@ void LineSource::draw_controls(const Programs &programs, glm::vec2 physical_scal
   LineBase::draw_controls(programs, physical_scale_factor, active, true);
 }
 
-void LineSource::draw_imgui_controls() {
+bool LineSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
   imgui_line_controls();
+  ImGui::Separator();
+  return ImGui::Button("Delete Object");
+}
+
+std::string LineSource::serialize() const {
+  return "(LineSource " + serialize_coordinates() + " " + waveform->serialize() + " " +
+         std::to_string(phase) + ")";
 }
