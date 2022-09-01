@@ -427,7 +427,19 @@ bool Rectangle::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_s
   return active;
 }
 
-void Rectangle::draw_imgui_controls() { medium.draw_imgui_controls(); }
+static void imgui_point_input(const char *label, float &x, float &y) {
+  float p0[2] = {x, y};
+  ImGui::DragFloat2(label, p0, 0.5);
+  x = p0[0];
+  y = p0[1];
+}
+
+void Rectangle::draw_imgui_controls() {
+  medium.draw_imgui_controls();
+
+  imgui_point_input("Corner 0 (m)", x0, y0);
+  imgui_point_input("Corner 1 (m)", x1, y1);
+}
 
 // get the transformation matrix for drawing a line from (x0, y) to (x1, y1)
 static glm::mat4 transform_line(float x0, float y0, float x1, float y1,
@@ -459,7 +471,7 @@ void LineBase::draw_controls(const Programs &programs, glm::vec2 physical_scale_
   draw_point(programs, x1, y1, physical_scale_factor);
 
   // draw line
-  glLineWidth(2.0);
+  glLineWidth(width + 1);
   draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
 }
 
@@ -478,9 +490,15 @@ bool LineBase::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_si
   return false;
 }
 
+void LineBase::imgui_line_controls() {
+  imgui_point_input("Point 0 (m)", x0, y0);
+  imgui_point_input("Point 1 (m)", x1, y1);
+  ImGui::SliderFloat("Width (px)", &width, 1, 5);
+}
+
 void Line::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   medium.set_gl_program(programs);
-  glLineWidth(1.0);
+  glLineWidth(width);
   draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
 }
 
@@ -489,7 +507,10 @@ void Line::draw_controls(const Programs &programs, glm::vec2 physical_scale_fact
   LineBase::draw_controls(programs, physical_scale_factor, active, false);
 }
 
-void Line::draw_imgui_controls() { medium.draw_imgui_controls(); }
+void Line::draw_imgui_controls() {
+  medium.draw_imgui_controls();
+  imgui_line_controls();
+}
 
 void AreaClear::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   glUseProgram(programs.object_program);
@@ -635,11 +656,12 @@ bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen
 void PointSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+  imgui_point_input("Position (m)", x, y);
 }
 
 void LineSource::draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const {
   waveform->set_gl_program(programs, time, phase);
-  glLineWidth(1);
+  glLineWidth(width);
   draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
 }
 
@@ -651,4 +673,5 @@ void LineSource::draw_controls(const Programs &programs, glm::vec2 physical_scal
 void LineSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+  imgui_line_controls();
 }

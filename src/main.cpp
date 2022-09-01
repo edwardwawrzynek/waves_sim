@@ -299,9 +299,9 @@ int main() {
   // app.add_object(std::make_unique<PointSource>(0.0, 0.0,
   // std::make_unique<SineWaveform>(6.0, 1.0)));
   app.add_object(std::make_unique<Rectangle>(10.0, 10.0, 15.0, 15.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Line>(0.5, 1.0, 5.0, 8.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<Line>(2.0, 2.0, 3.0, 3.0, MediumType::Boundary()));
-  app.add_object(std::make_unique<LineSource>(-1.0, -1.0, -4.0, -4.0,
+  app.add_object(std::make_unique<Line>(0.5, 1.0, 5.0, 8.0, 1.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<Line>(2.0, 2.0, 3.0, 3.0, 1.0, MediumType::Boundary()));
+  app.add_object(std::make_unique<LineSource>(-1.0, -1.0, -4.0, -4.0, 1.0,
                                               std::make_unique<SineWaveform>(6.0, 1.0)));
 
 #if defined(__EMSCRIPTEN__)

@@ -203,14 +203,17 @@ public:
 class LineBase : public SimObject {
 public:
   float x0, y0, x1, y1;
+  float width;
   // which corner handle is active
   int active_handle{-1};
 
   void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor, bool active,
                      bool draw_holes) const;
   bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+  void imgui_line_controls();
 
-  LineBase(float x0, float y0, float x1, float y1) : x0(x0), y0(y0), x1(x1), y1(y1){};
+  LineBase(float x0, float y0, float x1, float y1, float width)
+      : x0(x0), y0(y0), x1(x1), y1(y1), width(width){};
 };
 
 // A line segment between two points
@@ -223,8 +226,8 @@ public:
                      bool active) const override;
   void draw_imgui_controls() override;
 
-  Line(float x0, float y0, float x1, float y1, MediumType medium)
-      : LineBase(x0, y0, x1, y1), medium(medium){};
+  Line(float x0, float y0, float x1, float y1, float width, MediumType medium)
+      : LineBase(x0, y0, x1, y1, width), medium(medium){};
 };
 
 // A waveform describes the intensity of a source over time.
@@ -330,8 +333,9 @@ public:
                      bool active) const override;
   void draw_imgui_controls() override;
 
-  LineSource(float x0, float y0, float x1, float y1, std::unique_ptr<Waveform> waveform)
-      : LineBase(x0, y0, x1, y1), waveform(std::move(waveform)){};
+  LineSource(float x0, float y0, float x1, float y1, float width,
+             std::unique_ptr<Waveform> waveform)
+      : LineBase(x0, y0, x1, y1, width), waveform(std::move(waveform)){};
 };
 
 #endif
