@@ -267,7 +267,7 @@ public:
   virtual void draw_imgui_prop_controls() = 0;
   // draw imgui controls for the waveform properties and type
   static void draw_imgui_controls(std::unique_ptr<Waveform> &waveform,
-                                  const char *label = "Waveform:");
+                                  const char *label = "Waveform:", const char *type_label = "Type");
 
   virtual int waveform_type_index() = 0;
 
@@ -329,6 +329,34 @@ public:
   std::string serialize() const override;
 
   SquareWaveform(float amp, float freq) : amp(amp), freq(freq){};
+};
+
+// A pulse (a guassian envelope) of some other waveform
+class GaussianEnvelope : public Waveform {
+public:
+  // the underlying waveform
+  std::unique_ptr<Waveform> waveform;
+
+  // length of <the pulse (in s). This is really the 95% interval of the gaussian.
+  float duration_95;
+  // the time at which the pulse begins (in s).
+  float start_t;
+
+  // evaluate gaussian distribution at x
+  // the return value is normalized to hit 1 at mean (ie, not a proper pdf)
+  float gaussian(float x) const;
+  float gaussian_diff(float x) const;
+
+  float sample(float time, float phase) const override;
+  float sample_diff(float time, float phase) const override;
+
+  void draw_imgui_prop_controls() override;
+  int waveform_type_index() override;
+  std::pair<float, float> get_freq_amp() const override;
+  std::string serialize() const override;
+
+  GaussianEnvelope(std::unique_ptr<Waveform> waveform, float duration, float start_t)
+      : waveform(std::move(waveform)), duration_95(duration), start_t(start_t){};
 };
 
 // A point wave source

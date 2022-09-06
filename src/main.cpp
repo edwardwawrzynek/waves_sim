@@ -1,7 +1,4 @@
 #include "main.hpp"
-#include <imgui.h>
-#include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl.h>
 
 #include <cstdio>
 #include <fstream>
@@ -90,6 +87,11 @@ int WavesApp::init_sim_texture() {
 }
 
 int WavesApp::init() {
+  open_file_browser.SetTitle("Open File");
+  save_file_browser.SetTitle("Save File");
+  open_file_browser.SetTypeFilters({".sim"});
+  save_file_browser.SetTypeFilters({".sim"});
+
   return init_sdl_opengl() || init_sdl_window() || init_imgui() || programs.init() ||
          init_sim_texture();
 }
@@ -215,6 +217,8 @@ void WavesApp::draw_error_popups() {
     if (ImGui::Button("Ok")) {
       ImGui::CloseCurrentPopup();
     }
+
+    ImGui::EndPopup();
   }
 
   if (ImGui::BeginPopupModal("Invalid Environment File")) {
@@ -223,6 +227,8 @@ void WavesApp::draw_error_popups() {
     if (ImGui::Button("Ok")) {
       ImGui::CloseCurrentPopup();
     }
+
+    ImGui::EndPopup();
   }
 }
 
@@ -248,7 +254,7 @@ void WavesApp::draw_add_menu() {
   bool added = false;
 
   if (ImGui::MenuItem("Point Source")) {
-    add_object(std::make_unique<PointSource>(0, 0, std::make_unique<SineWaveform>(1.0, 1.0), 0.0));
+    add_object(std::make_unique<PointSource>(0, 0, std::make_unique<SineWaveform>(5.0, 1.0), 0.0));
     added = true;
   }
   if (ImGui::MenuItem("Line Source")) {
@@ -270,9 +276,35 @@ void WavesApp::draw_add_menu() {
   }
 }
 
+std::string WavesApp::serialize() { return environment.serialize(); }
+
+void WavesApp::save_to_file() {
+  if (!open_file_path) {
+    save_file_browser.Open();
+  } else {
+    std::fstream file{*open_file_path, std::ios_base::out};
+    file << serialize();
+    file.close();
+  }
+}
+
+void WavesApp::draw_file_menu() {
+  if (ImGui::MenuItem("Open")) {
+    open_file_browser.Open();
+  }
+  if (ImGui::MenuItem("Save")) {
+    save_to_file();
+  }
+  if (ImGui::MenuItem("Save As")) {
+    open_file_path = {};
+    save_to_file();
+  }
+}
+
 void WavesApp::draw_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
+      draw_file_menu();
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Add")) {
@@ -316,9 +348,27 @@ int WavesApp::draw_frame() {
         ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
                          std::min(texture_width, texture_height) / 2 - 1);
         ImGui::SliderInt("Iterations per display cycle", &sim_cycles, 1, 100);
+        ImGui::Text("Time: %f", time);
       }
     }
     ImGui::End();
+  }
+
+  open_file_browser.Display();
+  save_file_browser.Display();
+
+  if (save_file_browser.HasSelected()) {
+    open_file_path = save_file_browser.GetSelected().string();
+    save_to_file();
+    save_file_browser.ClearSelected();
+  }
+
+  if (open_file_browser.HasSelected()) {
+    open_file_path = open_file_browser.GetSelected().string();
+    load_from_file(*open_file_path);
+    time = 0;
+    clear_sim();
+    open_file_browser.ClearSelected();
   }
 
   // run simulation step

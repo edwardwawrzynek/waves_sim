@@ -2,6 +2,10 @@
 #define MAIN_H
 
 #include "geometry.hpp"
+#include <imfilebrowser.h>
+#include <imgui.h>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl.h>
 
 #include <SDL.h>
 #if defined(__EMSCRIPTEN__)
@@ -19,7 +23,10 @@ class WavesApp {
   SDL_GLContext gl_context;
 
   // Display window size
-  GLsizei width{1200}, height{800};
+  GLsizei width{1400}, height{800};
+
+  ImGui::FileBrowser open_file_browser{};
+  ImGui::FileBrowser save_file_browser{ImGuiFileBrowserFlags_EnterNewFilename};
 
   // Simulation state storage texture. This is an rgba floating point texture.
   // The red channel is position (u), green is velocity (du/dt), blue is wave speed (c), alpha is
@@ -55,6 +62,9 @@ class WavesApp {
   int sim_cycles{1};
   // if simulation settings should be shown
   bool show_settings{true};
+
+  // the current open path
+  std::optional<std::string> open_file_path{};
 
   // gl programs and geometry
   Programs programs{};
@@ -97,6 +107,12 @@ class WavesApp {
   // Draw and handle main menu options
   void draw_menu_bar();
   void draw_add_menu();
+  void draw_file_menu();
+  // Save the current environment
+  void save_to_file();
+
+  // Write the current environment to stream
+  std::string serialize();
 
 public:
   WavesApp() = default;

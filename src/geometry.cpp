@@ -235,6 +235,7 @@ static std::string read_token(std::istream &in) {
       return "";
     }
   } while (c == ' ' || c == '(' || c == '\n' || c == '\t');
+  in.putback(c);
 
   while (true) {
     c = in.get();
@@ -340,6 +341,7 @@ std::optional<std::unique_ptr<SimObject>> SimObject::deserialize(std::istream &i
 
     return std::make_unique<LineSource>(x0, y0, x1, y1, width, std::move(waveform.value()), phase);
   } else {
+    std::cout << "Object: " << object << ":\n";
     // unrecognized object
     return {};
   }
@@ -706,23 +708,28 @@ void Waveform::set_gl_program(const Programs &programs, float time, float phase)
   glColorMask(GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE);
 }
 
-void Waveform::draw_imgui_controls(std::unique_ptr<Waveform> &waveform, const char *label) {
+void Waveform::draw_imgui_controls(std::unique_ptr<Waveform> &waveform, const char *label,
+                                   const char *type_label) {
   ImGui::Text("%s", label);
-  const char *waveform_type_names[3] = {"Sine", "Triangle", "Square"};
+  const char *waveform_type_names[4] = {"Sine", "Triangle", "Square", "Pulse"};
   int waveform_type = waveform->waveform_type_index();
-  if (ImGui::Combo("Type", &waveform_type, waveform_type_names,
+  if (ImGui::Combo(type_label, &waveform_type, waveform_type_names,
                    IM_ARRAYSIZE(waveform_type_names))) {
-    const auto &prev_freq_amp = waveform->get_freq_amp();
-    switch (waveform_type) {
-    case 0:
-      waveform = std::make_unique<SineWaveform>(prev_freq_amp.second, prev_freq_amp.first);
-      break;
-    case 1:
-      waveform = std::make_unique<TriangleWaveform>(prev_freq_amp.second, prev_freq_amp.first);
-      break;
-    case 2:
-      waveform = std::make_unique<SquareWaveform>(prev_freq_amp.second, prev_freq_amp.first);
-      break;
+    if (waveform_type != waveform->waveform_type_index()) {
+      const auto &prev_freq_amp = waveform->get_freq_amp();
+      switch (waveform_type) {
+      case 0:
+        waveform = std::make_unique<SineWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+        break;
+      case 1:
+        waveform = std::make_unique<TriangleWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+        break;
+      case 2:
+        waveform = std::make_unique<SquareWaveform>(prev_freq_amp.second, prev_freq_amp.first);
+        break;
+      case 3:
+        waveform = std::make_unique<GaussianEnvelope>(std::move(waveform), 1.0, 0.0);
+      }
     }
   }
 
@@ -733,26 +740,36 @@ std::pair<float, float> Waveform::get_freq_amp() const { return {1.0, 1.0}; }
 
 std::optional<std::unique_ptr<Waveform>> Waveform::deserialze(std::istream &in) {
   auto type = read_token(in);
+
   auto amp_s = read_token(in);
   auto freq_s = read_token(in);
 
   float amp = std::stof(amp_s);
   float freq = std::stof(freq_s);
 
-  if (in.get() != ')') {
-    return {};
+  if (type == "Sine" || type == "Square" || type == "Triangle") {
+    if (in.get() != ')') {
+      return {};
+    }
+
+    if (type == "Sine") {
+      return std::make_unique<SineWaveform>(amp, freq);
+    } else if (type == "Square") {
+      return std::make_unique<SquareWaveform>(amp, freq);
+    } else if (type == "Triangle") {
+      return std::make_unique<TriangleWaveform>(amp, freq);
+    }
+  } else if (type == "GaussianEnvelope") {
+    auto waveform = Waveform::deserialze(in);
+    if (!waveform || in.get() != ')') {
+      return {};
+    }
+
+    return std::make_unique<GaussianEnvelope>(std::move(waveform.value()), amp, freq);
   }
 
-  if (type == "Sine") {
-    return std::make_unique<SineWaveform>(amp, freq);
-  } else if (type == "Square") {
-    return std::make_unique<SquareWaveform>(amp, freq);
-  } else if (type == "Triangle") {
-    return std::make_unique<TriangleWaveform>(amp, freq);
-  } else {
-    // unrecognized waveform type
-    return {};
-  }
+  // unrecognized waveform type
+  return {};
 }
 
 float SineWaveform::sample(float time, float phase) const {
@@ -841,6 +858,46 @@ std::string SquareWaveform::serialize() const {
   return "(Square " + std::to_string(amp) + " " + std::to_string(freq) + ")";
 }
 
+float GaussianEnvelope::gaussian(float x) const {
+  float mu = duration_95 / 2.0 + start_t;
+  float sigma = duration_95 / 4.0;
+
+  return std::exp(-1.0 / 2 * std::pow((x - mu) / sigma, 2.0));
+}
+
+float GaussianEnvelope::gaussian_diff(float x) const {
+  float mu = duration_95 / 2.0 + start_t;
+  float sigma = duration_95 / 4.0;
+
+  return (mu - x) / sigma * std::exp(-1.0 / 2 * std::pow((x - mu) / sigma, 2.0));
+}
+
+float GaussianEnvelope::sample(float time, float phase) const {
+  return gaussian(time) * waveform->sample(time, phase);
+}
+
+float GaussianEnvelope::sample_diff(float time, float phase) const {
+  return gaussian(time) * waveform->sample_diff(time, phase) +
+         gaussian_diff(time) * waveform->sample(time, phase);
+}
+
+void GaussianEnvelope::draw_imgui_prop_controls() {
+  ImGui::DragFloat("Duration (s)", &duration_95);
+  ImGui::DragFloat("Start offset (s)", &start_t);
+  ImGui::NewLine();
+
+  Waveform::draw_imgui_controls(waveform, "Component waveform:", "Component Type");
+}
+
+int GaussianEnvelope::waveform_type_index() { return 3; }
+
+std::pair<float, float> GaussianEnvelope::get_freq_amp() const { return waveform->get_freq_amp(); }
+
+std::string GaussianEnvelope::serialize() const {
+  return "(GaussianEnvelope " + std::to_string(duration_95) + " " + std::to_string(start_t) + " " +
+         waveform->serialize() + ")";
+}
+
 void PointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
                        float time) const {
   waveform->set_gl_program(programs, time, phase);
@@ -867,8 +924,9 @@ bool PointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen
 bool PointSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+  ImGui::NewLine();
   imgui_point_input("Position (m)", x, y);
-  ImGui::Separator();
+  ImGui::NewLine();
   return ImGui::Button("Delete Object");
 }
 
@@ -891,8 +949,9 @@ void LineSource::draw_controls(const Programs &programs, glm::vec2 physical_scal
 bool LineSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+  ImGui::NewLine();
   imgui_line_controls();
-  ImGui::Separator();
+  ImGui::NewLine();
   return ImGui::Button("Delete Object");
 }
 
