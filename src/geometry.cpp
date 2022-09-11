@@ -225,7 +225,7 @@ std::string MediumType::serialize() const {
 }
 
 // read a token from an istream until a space or ) appears
-static std::string read_token(std::istream &in) {
+std::string SimObject::read_token(std::istream &in) {
   std::string token = "";
   char c;
   // read any whitespace
@@ -252,14 +252,14 @@ static std::string read_token(std::istream &in) {
 }
 
 std::optional<MediumType> MediumType::deserialize(std::istream &in) {
-  auto type = read_token(in);
+  auto type = SimObject::read_token(in);
   if (type == "Boundary") {
     if (in.get() != ')')
       return {};
 
     return MediumType::Boundary();
   } else if (type == "Medium") {
-    auto ior_s = read_token(in);
+    auto ior_s = SimObject::read_token(in);
     if (in.get() != ')')
       return {};
 
@@ -287,8 +287,8 @@ bool SimObject::draw_imgui_controls() {
 }
 
 static std::tuple<float, float> read_coord(std::istream &in) {
-  float x = std::stof(read_token(in));
-  float y = std::stof(read_token(in));
+  float x = std::stof(SimObject::read_token(in));
+  float y = std::stof(SimObject::read_token(in));
 
   return {x, y};
 }
@@ -585,7 +585,7 @@ bool Rectangle::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_s
 
 static void imgui_point_input(const char *label, float &x, float &y) {
   float p0[2] = {x, y};
-  ImGui::DragFloat2(label, p0, 0.5);
+  ImGui::DragFloat2(label, p0, 0.5, 0.0f, 0.0f, "%.3f m");
   x = p0[0];
   y = p0[1];
 }
@@ -593,8 +593,8 @@ static void imgui_point_input(const char *label, float &x, float &y) {
 bool Rectangle::draw_imgui_controls() {
   medium.draw_imgui_controls();
 
-  imgui_point_input("Corner 0 (m)", x0, y0);
-  imgui_point_input("Corner 1 (m)", x1, y1);
+  imgui_point_input("Corner 0", x0, y0);
+  imgui_point_input("Corner 1", x1, y1);
 
   ImGui::Separator();
   return ImGui::Button("Delete Object");
@@ -655,9 +655,9 @@ bool LineBase::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_si
 }
 
 void LineBase::imgui_line_controls() {
-  imgui_point_input("Point 0 (m)", x0, y0);
-  imgui_point_input("Point 1 (m)", x1, y1);
-  ImGui::SliderFloat("Width (px)", &width, 1, 5);
+  imgui_point_input("Point 0", x0, y0);
+  imgui_point_input("Point 1", x1, y1);
+  ImGui::SliderFloat("Width", &width, 1, 5, "%.0f px");
 }
 
 std::string LineBase::serialize_coordinates() const {
@@ -739,10 +739,10 @@ void Waveform::draw_imgui_controls(std::unique_ptr<Waveform> &waveform, const ch
 std::pair<float, float> Waveform::get_freq_amp() const { return {1.0, 1.0}; }
 
 std::optional<std::unique_ptr<Waveform>> Waveform::deserialze(std::istream &in) {
-  auto type = read_token(in);
+  auto type = SimObject::read_token(in);
 
-  auto amp_s = read_token(in);
-  auto freq_s = read_token(in);
+  auto amp_s = SimObject::read_token(in);
+  auto freq_s = SimObject::read_token(in);
 
   float amp = std::stof(amp_s);
   float freq = std::stof(freq_s);
@@ -781,8 +781,8 @@ float SineWaveform::sample_diff(float time, float phase) const {
 }
 
 void SineWaveform::draw_imgui_prop_controls() {
-  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
-  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+  ImGui::DragFloat("Frequency", &freq, 1e24, 0.0, 1e29, "%.3f Hz", ImGuiSliderFlags_Logarithmic);
+  ImGui::DragFloat("Amplitude", &amp, 1e24, 0.0, 1e29, "%.3f", ImGuiSliderFlags_Logarithmic);
 }
 
 int SineWaveform::waveform_type_index() { return 0; }
@@ -818,8 +818,8 @@ float TriangleWaveform::sample_diff(float time, float phase) const {
 }
 
 void TriangleWaveform::draw_imgui_prop_controls() {
-  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
-  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+  ImGui::DragFloat("Frequency", &freq, 1e24, 0.0, 1e29, "%.3f Hz", ImGuiSliderFlags_Logarithmic);
+  ImGui::DragFloat("Amplitude", &amp, 1e24, 0.0, 1e29, "%.3f", ImGuiSliderFlags_Logarithmic);
 }
 
 int TriangleWaveform::waveform_type_index() { return 1; }
@@ -846,8 +846,8 @@ float SquareWaveform::sample_diff(float time, float phase) const {
 }
 
 void SquareWaveform::draw_imgui_prop_controls() {
-  ImGui::InputFloat("Frequency (Hz)", &freq, 0.0f, 0.0f, "%e");
-  ImGui::InputFloat("Amplitude", &amp, 0.0f, 0.0f, "%e");
+  ImGui::DragFloat("Frequency", &freq, 1e24, 0.0, 1e29, "%.3f Hz", ImGuiSliderFlags_Logarithmic);
+  ImGui::DragFloat("Amplitude", &amp, 1e24, 0.0, 1e29, "%.3f", ImGuiSliderFlags_Logarithmic);
 }
 
 int SquareWaveform::waveform_type_index() { return 2; }
@@ -925,7 +925,7 @@ bool PointSource::draw_imgui_controls() {
   Waveform::draw_imgui_controls(waveform);
   ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
   ImGui::NewLine();
-  imgui_point_input("Position (m)", x, y);
+  imgui_point_input("Position", x, y);
   ImGui::NewLine();
   return ImGui::Button("Delete Object");
 }

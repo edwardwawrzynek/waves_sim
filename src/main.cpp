@@ -240,6 +240,12 @@ void WavesApp::load_from_file(const std::string &path) {
     return;
   }
 
+  if (!deserialize_settings(file)) {
+    fprintf(stderr, "Environment file is missing simulation settings\n");
+    ImGui::OpenPopup("Invalid Environment File");
+    return;
+  }
+
   auto new_env = Environment::deserialize(file);
   if (!new_env) {
     fprintf(stderr, "Environment file is invalid\n");
@@ -276,7 +282,7 @@ void WavesApp::draw_add_menu() {
   }
 }
 
-std::string WavesApp::serialize() { return environment.serialize(); }
+std::string WavesApp::serialize() { return serialize_settings() + "\n" + environment.serialize(); }
 
 void WavesApp::save_to_file() {
   if (!open_file_path) {
@@ -342,13 +348,20 @@ int WavesApp::draw_frame() {
         clear_sim();
       }
 
+      ImGui::NewLine();
+      ImGui::Text("Time: %f s", time);
+      ImGui::DragFloat("Wave Speed", &wave_speed_vacuum, 1e25, 0.0, 1e29, "%.3f m/s",
+                       ImGuiSliderFlags_Logarithmic);
+
       if (ImGui::CollapsingHeader("PDE Solver Settings")) {
-        ImGui::SliderFloat("Delta t", &delta_t, 0.0, 0.03);
-        ImGui::SliderFloat("Delta x", &delta_x, 0.0, 0.1);
+        ImGui::DragFloat("Delta t", &delta_t, 1e25, 0.0, 1e29, "%.3f s",
+                         ImGuiSliderFlags_Logarithmic);
+        ImGui::DragFloat("Delta x", &delta_x, 1e25, 0.0, 1e29, "%.3f m",
+                         ImGuiSliderFlags_Logarithmic);
+
         ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
-                         std::min(texture_width, texture_height) / 2 - 1);
+                         std::min(texture_width, texture_height) / 2 - 1, "%i tx");
         ImGui::SliderInt("Iterations per display cycle", &sim_cycles, 1, 100);
-        ImGui::Text("Time: %f", time);
       }
     }
     ImGui::End();
@@ -419,6 +432,28 @@ void WavesApp::shutdown() {
 
 void WavesApp::add_object(std::unique_ptr<SimObject> object) {
   environment.objects.push_back(std::move(object));
+}
+
+std::string WavesApp::serialize_settings() const {
+  return "(Settings " + std::to_string(delta_t) + " " + std::to_string(delta_x) + " " +
+         std::to_string(wave_speed_vacuum) + " " + std::to_string(damping_area_size) + " " +
+         std::to_string(texture_width) + " " + std::to_string(texture_height) + ")";
+}
+
+bool WavesApp::deserialize_settings(std::istream &in) {
+  auto type = SimObject::read_token(in);
+  if (type == "Settings") {
+    delta_t = std::stof(SimObject::read_token(in));
+    delta_x = std::stof(SimObject::read_token(in));
+    wave_speed_vacuum = std::stof(SimObject::read_token(in));
+    damping_area_size = std::stoi(SimObject::read_token(in));
+    texture_width = std::stoul(SimObject::read_token(in));
+    texture_height = std::stoul(SimObject::read_token(in));
+    // read closing paren
+    return in.get() == ')';
+  }
+
+  return false;
 }
 
 WavesApp app{};

@@ -111,6 +111,10 @@ class WavesApp {
   // Save the current environment
   void save_to_file();
 
+  // Serialize the simulation settings
+  std::string serialize_settings() const;
+  bool deserialize_settings(std::istream &in);
+
   // Write the current environment to stream
   std::string serialize();
 

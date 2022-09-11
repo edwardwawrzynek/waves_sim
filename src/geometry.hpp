@@ -162,6 +162,7 @@ public:
   virtual std::string serialize() const = 0;
   // get the object from its textual representation
   static std::optional<std::unique_ptr<SimObject>> deserialize(std::istream &in);
+  static std::string read_token(std::istream &in);
 
   virtual ~SimObject() = default;
 };
