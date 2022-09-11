@@ -325,6 +325,8 @@ void WavesApp::draw_menu_bar() {
   }
 }
 
+bool WavesApp::solver_settings_stable() { return delta_x / (delta_t * wave_speed_vacuum) > 1.5; }
+
 int WavesApp::draw_frame() {
   if (handle_sdl_events()) {
     return 1;
@@ -352,12 +354,27 @@ int WavesApp::draw_frame() {
       ImGui::Text("Time: %f s", time);
       ImGui::DragFloat("Wave Speed", &wave_speed_vacuum, 1e25, 0.0, 1e29, "%.3f m/s",
                        ImGuiSliderFlags_Logarithmic);
+      if (!solver_settings_stable()) {
+        ImGui::TextColored(ImVec4(1.0, 0.0, 0.0, 1.0), "Warning: Solver may be unstable.");
+        ImGui::TextColored(
+            ImVec4(1.0, 0.0, 0.0, 1.0),
+            "To fix, increase delta t or decrease delta x (in PDE Solver Settings).");
+      } else {
+        ImGui::NewLine();
+        ImGui::NewLine();
+      }
 
       if (ImGui::CollapsingHeader("PDE Solver Settings")) {
         ImGui::DragFloat("Delta t", &delta_t, 1e25, 0.0, 1e29, "%.3f s",
                          ImGuiSliderFlags_Logarithmic);
         ImGui::DragFloat("Delta x", &delta_x, 1e25, 0.0, 1e29, "%.3f m",
                          ImGuiSliderFlags_Logarithmic);
+
+        if (!solver_settings_stable()) {
+          ImGui::TextColored(
+              ImVec4(1.0, 0.0, 0.0, 1.0),
+              "Warning: Solver may be unstable. Increase delta t (or decrease delta x).");
+        }
 
         ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
                          std::min(texture_width, texture_height) / 2 - 1, "%i tx");

@@ -118,6 +118,9 @@ class WavesApp {
   // Write the current environment to stream
   std::string serialize();
 
+  // Return true if current delta x / delta y settings should be stable
+  bool solver_settings_stable();
+
 public:
   WavesApp() = default;
 
