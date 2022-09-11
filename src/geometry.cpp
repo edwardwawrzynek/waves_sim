@@ -882,8 +882,8 @@ float GaussianEnvelope::sample_diff(float time, float phase) const {
 }
 
 void GaussianEnvelope::draw_imgui_prop_controls() {
-  ImGui::DragFloat("Duration (s)", &duration_95);
-  ImGui::DragFloat("Start offset (s)", &start_t);
+  ImGui::DragFloat("Duration (s)", &duration_95, 0.25);
+  ImGui::DragFloat("Start offset (s)", &start_t, 0.25);
   ImGui::NewLine();
 
   Waveform::draw_imgui_controls(waveform, "Component waveform:", "Component Type");
