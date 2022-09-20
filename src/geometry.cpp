@@ -475,6 +475,7 @@ void Rectangle::draw_controls(const Programs &programs, glm::vec2 physical_scale
   draw_point(programs, x1, y0, physical_scale_factor);
   draw_point(programs, x1, y1, physical_scale_factor);
   // draw outline of rectangle
+  glLineWidth(1);
   glUniformMatrix4fv(programs.object_transform_loc, 1, GL_FALSE,
                      glm::value_ptr(transform_rect(x0, y0, x1, y1, physical_scale_factor)));
   programs.geo.draw_geo(GeometryType::SquareLine);
@@ -635,7 +636,7 @@ void LineBase::draw_controls(const Programs &programs, glm::vec2 physical_scale_
   draw_point(programs, x1, y1, physical_scale_factor);
 
   // draw line
-  glLineWidth(width + 1);
+  glLineWidth(2);
   draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
 }
 
@@ -657,7 +658,7 @@ bool LineBase::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_si
 void LineBase::imgui_line_controls() {
   imgui_point_input("Point 0", x0, y0);
   imgui_point_input("Point 1", x1, y1);
-  ImGui::SliderFloat("Width", &width, 1, 5, "%.0f px");
+  ImGui::DragFloat("Width", &width, 0.2f, 1.0, 1000.0, "%.0f px");
 }
 
 std::string LineBase::serialize_coordinates() const {

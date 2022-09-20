@@ -54,6 +54,9 @@ class WavesApp {
   // Size (in texels) of absorbing boundary layer
   int damping_area_size{128};
 
+  // if delta t should be set automatically based on delta x
+  bool auto_delta_t{true};
+
   // if editing controls should be shown
   bool show_edit{true};
   // if program simulation should be run (or is paused)
@@ -110,6 +113,8 @@ class WavesApp {
   void draw_file_menu();
   // Save the current environment
   void save_to_file();
+  // Draw simulation settings
+  void draw_settings();
 
   // Serialize the simulation settings
   std::string serialize_settings() const;
@@ -118,8 +123,10 @@ class WavesApp {
   // Write the current environment to stream
   std::string serialize();
 
-  // Return true if current delta x / delta y settings should be stable
+  // Return true if current delta x / delta t settings should be stable
   bool solver_settings_stable();
+  // Return the delta t setting that would make the solver stable
+  float solver_stable_delta_t();
 
 public:
   WavesApp() = default;
@@ -134,7 +141,7 @@ public:
   void shutdown();
 
   // Add an object to the environment
-  void add_object(std::unique_ptr<SimObject> object);
+  void add_object(std::unique_ptr<SimObject> object, bool selected = false);
 
   // Load the environment from a file
   void load_from_file(const std::string &path);

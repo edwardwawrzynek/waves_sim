@@ -325,19 +325,21 @@ void WavesApp::draw_menu_bar() {
   }
 }
 
-bool WavesApp::solver_settings_stable() { return delta_x / (delta_t * wave_speed_vacuum) > 1.5; }
+// check the condition for numerical stability
+bool WavesApp::solver_settings_stable() {
+  // 1.5 was empirically determined
+  return delta_x / (delta_t * wave_speed_vacuum) > 1.5;
+}
 
-int WavesApp::draw_frame() {
-  if (handle_sdl_events()) {
-    return 1;
-  }
+// solve the stability condition for maximum delta t
+float WavesApp::solver_stable_delta_t() { return delta_x / (1.5 * wave_speed_vacuum) - 0.000001; }
 
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplSDL2_NewFrame(window);
-  ImGui::NewFrame();
-
+void WavesApp::draw_settings() {
   // Draw simulation controls
   if (show_settings) {
+    // check if solver is numerically stable
+    bool stable = solver_settings_stable();
+
     if (ImGui::Begin("Simulation Settings", &show_settings)) {
       if (ImGui::Button(run_sim ? "Stop Simulation" : "Start Simulation")) {
         run_sim = !run_sim;
@@ -354,26 +356,33 @@ int WavesApp::draw_frame() {
       ImGui::Text("Time: %f s", time);
       ImGui::DragFloat("Wave Speed", &wave_speed_vacuum, 1e25, 0.0, 1e29, "%.3f m/s",
                        ImGuiSliderFlags_Logarithmic);
-      if (!solver_settings_stable()) {
+      if (!stable) {
         ImGui::TextColored(ImVec4(1.0, 0.0, 0.0, 1.0), "Warning: Solver may be unstable.");
         ImGui::TextColored(
             ImVec4(1.0, 0.0, 0.0, 1.0),
-            "To fix, increase delta t or decrease delta x (in PDE Solver Settings).");
+            "To fix, decrease delta t or increase delta x (in PDE Solver Settings).");
       } else {
         ImGui::NewLine();
         ImGui::NewLine();
       }
 
       if (ImGui::CollapsingHeader("PDE Solver Settings")) {
-        ImGui::DragFloat("Delta t", &delta_t, 1e25, 0.0, 1e29, "%.3f s",
-                         ImGuiSliderFlags_Logarithmic);
         ImGui::DragFloat("Delta x", &delta_x, 1e25, 0.0, 1e29, "%.3f m",
                          ImGuiSliderFlags_Logarithmic);
 
-        if (!solver_settings_stable()) {
+        ImGui::BeginDisabled(auto_delta_t);
+        ImGui::DragFloat("Delta t", &delta_t, 1e25, 0.0, 1e29, "%.3f s",
+                         ImGuiSliderFlags_Logarithmic);
+        ImGui::EndDisabled();
+
+        ImGui::Checkbox("Automatically set delta t to guarantee stability", &auto_delta_t);
+
+        ImGui::NewLine();
+
+        if (!stable) {
           ImGui::TextColored(
               ImVec4(1.0, 0.0, 0.0, 1.0),
-              "Warning: Solver may be unstable. Increase delta t (or decrease delta x).");
+              "Warning: Solver may be unstable. Decrease delta t (or increase delta x).");
         }
 
         ImGui::SliderInt("Absorbing layer width", &damping_area_size, 0,
@@ -400,6 +409,23 @@ int WavesApp::draw_frame() {
     clear_sim();
     open_file_browser.ClearSelected();
   }
+}
+
+int WavesApp::draw_frame() {
+  if (handle_sdl_events()) {
+    return 1;
+  }
+
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame(window);
+  ImGui::NewFrame();
+
+  // automatically set delta_t
+  if (auto_delta_t) {
+    delta_t = solver_stable_delta_t();
+  }
+
+  draw_settings();
 
   // run simulation step
   if (run_sim) {
@@ -447,8 +473,11 @@ void WavesApp::shutdown() {
   SDL_Quit();
 }
 
-void WavesApp::add_object(std::unique_ptr<SimObject> object) {
+void WavesApp::add_object(std::unique_ptr<SimObject> object, bool selected) {
   environment.objects.push_back(std::move(object));
+  if (selected) {
+    environment.active_object = environment.objects.size() - 1;
+  }
 }
 
 std::string WavesApp::serialize_settings() const {
@@ -483,6 +512,8 @@ int main() {
   }
 
   app.add_object(std::make_unique<AreaClear>());
+  app.add_object(
+      std::make_unique<PointSource>(0.0, 0.0, std::make_unique<SineWaveform>(5.0, 1.0), 0.0), true);
 
 #if defined(__EMSCRIPTEN__)
   emscripten_set_main_loop(webDrawFrame, 0, true);
