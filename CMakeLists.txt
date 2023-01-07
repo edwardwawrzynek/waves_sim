@@ -14,6 +14,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES GNU OR CMAKE_CXX_COMPILER_ID MATCHES Clang)
     set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 endif()
 
+include(GNUInstallDirs)
+
 include(CTest)
 if(BUILD_TESTING)
     # Load GTest

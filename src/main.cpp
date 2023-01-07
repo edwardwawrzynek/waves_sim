@@ -36,7 +36,7 @@ int WavesApp::init_sdl_window() {
   // setup graphics context
   SDL_WindowFlags window_flags =
       (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-  window = SDL_CreateWindow("Waves", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height,
+  window = SDL_CreateWindow("Wave Equation Numerical Solver", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height,
                             window_flags);
   gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
@@ -263,6 +263,9 @@ void WavesApp::draw_add_menu() {
     add_object(std::make_unique<PointSource>(0, 0, std::make_unique<SineWaveform>(5.0, 1.0), 0.0));
     added = true;
   }
+  if(ImGui::MenuItem("Add Moving Point Source")) {
+    add_object(std::make_unique<MovingPointSource>(0, 0, 1, 0, 1, std::make_unique<SineWaveform>(5.0, 1.0), 0.0));
+  }
   if (ImGui::MenuItem("Line Source")) {
     add_object(std::make_unique<LineSource>(-5, -5, 5, 5, 1.0,
                                             std::make_unique<SineWaveform>(1.0, 1.0), 0.0));
@@ -328,11 +331,11 @@ void WavesApp::draw_menu_bar() {
 // check the condition for numerical stability
 bool WavesApp::solver_settings_stable() {
   // 1.5 was empirically determined
-  return delta_x / (delta_t * wave_speed_vacuum) > 1.5;
+  return delta_x / (delta_t * wave_speed_vacuum) >= 1.5;
 }
 
 // solve the stability condition for maximum delta t
-float WavesApp::solver_stable_delta_t() { return delta_x / (1.5 * wave_speed_vacuum) - 0.000001; }
+float WavesApp::solver_stable_delta_t() { return (double)delta_x / (1.5 * (double)wave_speed_vacuum) - 1e-35f; }
 
 void WavesApp::draw_settings() {
   // Draw simulation controls

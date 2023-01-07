@@ -379,6 +379,35 @@ public:
       : x(x), y(y), waveform(std::move(waveform)), phase(phase){};
 };
 
+// A moving point wave source
+class MovingPointSource : public SimObject {
+public:
+  // start location
+  float x0, y0;
+  // end location
+  float x1, y1;
+  // speed of movement
+  float speed;
+
+  std::unique_ptr<Waveform> waveform;
+  float phase;
+
+  int active_handle{-1};
+
+  // calculate current position
+  std::pair<float, float> current_pos(float time) const;
+
+  void draw(const Programs &programs, glm::vec2 physical_scale_factor, float time) const override;
+  void draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                     bool active) const override;
+  bool handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) override;
+  bool draw_imgui_controls() override;
+  std::string serialize() const override;
+
+  MovingPointSource(float x0, float y0, float x1, float y1, float time_end, std::unique_ptr<Waveform> waveform, float phase)
+      : x0(x0), y0(y0), x1(x1), y1(y1), speed(time_end), waveform(std::move(waveform)), phase(phase){};
+};
+
 // A line wave source (which leads to a plane wave)
 class LineSource : public LineBase {
 public:

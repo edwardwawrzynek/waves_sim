@@ -331,6 +331,18 @@ std::optional<std::unique_ptr<SimObject>> SimObject::deserialize(std::istream &i
       return {};
 
     return std::make_unique<PointSource>(x, y, std::move(waveform.value()), phase);
+  } else if(object == "MovingPointSource") {
+    auto [x0, y0] = read_coord(in);
+    auto [x1, y1] = read_coord(in);
+    auto speed = std::stof(read_token(in));
+
+    auto waveform = Waveform::deserialze(in);
+    auto phase = std::stof(read_token(in));
+    if (!waveform || in.get() != ')') {
+      return {};
+    }
+
+    return std::make_unique<MovingPointSource>(x0, y0, x1, y1, speed, std::move(waveform.value()), phase);
   } else if (object == "LineSource") {
     auto [x0, y0, x1, y1] = read_coord_pair(in);
     auto width = std::stof(read_token(in));
@@ -933,6 +945,72 @@ bool PointSource::draw_imgui_controls() {
 
 std::string PointSource::serialize() const {
   return "(PointSource " + std::to_string(x) + " " + std::to_string(y) + " " +
+         waveform->serialize() + " " + std::to_string(phase) + ")";
+}
+
+std::pair<float, float> MovingPointSource::current_pos(float time) const {
+  // distance between points
+  float dist = std::sqrt(std::pow(x1 - x0, 2.0) + std::pow(y1 - y0, 2.0));
+  // current normalized position between points [0, 1]
+  float normal_pos = std::min(time * speed / dist, 1.0f);
+
+  float x = (x1 - x0) * normal_pos + x0;
+  float y = (y1 - y0) * normal_pos + y0;
+
+  return {x, y};
+}
+
+void MovingPointSource::draw(const Programs &programs, glm::vec2 physical_scale_factor,
+                             float time) const {
+  waveform->set_gl_program(programs, time, phase);
+  glPointSize(1);
+
+  auto pos = current_pos(time);
+  draw_point(programs, pos.first, pos.second, physical_scale_factor);
+}
+
+void MovingPointSource::draw_controls(const Programs &programs, glm::vec2 physical_scale_factor,
+                                      bool active) const {
+  glUseProgram(programs.handle_program);
+  glPointSize(rectangle_handle_size);
+  glUniform1i(programs.handle_hole_loc, true);
+  glUniform1i(programs.handle_selected_loc, active);
+  // draw handles at endpoints of movement
+  draw_point(programs, x0, y0, physical_scale_factor);
+  draw_point(programs, x1, y1, physical_scale_factor);
+  // draw line between endpoints
+  glLineWidth(2);
+  draw_line(programs, x0, y0, x1, y1, physical_scale_factor);
+}
+
+bool MovingPointSource::handle_events(glm::vec2 delta_x, bool active, glm::vec2 screen_size) {
+  float *corners[2][2] = {{&x0, &y0}, {&x1, &y1}};
+  // check if event effected handle
+  for (int i = 0; i < 2; i++) {
+    if (handle_handle_events(delta_x, active_handle == i, *corners[i][0], *corners[i][1],
+                             rectangle_handle_size, screen_size)) {
+      active_handle = i;
+      return true;
+    }
+  }
+
+  active_handle = -1;
+  return active && !ImGui::IsMouseClicked(0);
+}
+
+bool MovingPointSource::draw_imgui_controls() {
+  Waveform::draw_imgui_controls(waveform);
+  ImGui::SliderFloat("Phase Shift", &phase, 0.0, 1.0);
+  ImGui::NewLine();
+  imgui_point_input("Start Position", x0, y0);
+  imgui_point_input("End Position", x1, y1);
+  ImGui::DragFloat("Speed (m/s)", &speed, 0.25);
+  ImGui::NewLine();
+  return ImGui::Button("Delete Object");
+}
+
+std::string MovingPointSource::serialize() const {
+  return "(MovingPointSource " + std::to_string(x0) + " " + std::to_string(y0) + " " + std::to_string(x1) + " " + std::to_string(y1) + " " + std::to_string(speed) + " " +
          waveform->serialize() + " " + std::to_string(phase) + ")";
 }
 

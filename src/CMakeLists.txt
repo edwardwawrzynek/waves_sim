@@ -13,5 +13,7 @@ endif ()
 
 include_directories(${SDL2_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS} ../glm)
 
-add_executable(waves main.cpp geometry.cpp)
-target_link_libraries(waves PRIVATE ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${CMAKE_DL_LIBS} imgui)
+add_executable(waves_sim main.cpp geometry.cpp)
+target_link_libraries(waves_sim PRIVATE ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${CMAKE_DL_LIBS} imgui)
+
+install(TARGETS waves_sim DESTINATION ${CMAKE_INSTALL_BINDIR})
